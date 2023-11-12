@@ -1,0 +1,3 @@
+[submodule "tabsyn"]
+	path = tabsyn
+	url = https://github.com/ValterH/tabsyn.git
