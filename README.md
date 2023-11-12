@@ -16,7 +16,7 @@ Project Organization
 
     ├── LICENSE
     ├── README.md          <- The top-level README for developers using this project.
-    ├── data                <- Directory containing the data used in the project
+    ├── data               <- Directory containing the data used in the project
     ├── models             <- Trained and serialized models, model predictions, or model summaries
     ├── notebooks          <- Jupyter notebooks.
     ├── reports            <- Generated analysis as HTML, PDF, LaTeX, etc.
