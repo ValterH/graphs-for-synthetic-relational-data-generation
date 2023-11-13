@@ -1,18 +1,17 @@
 import pathlib
+from typing import Callable, Optional
 import numpy as np
 import pandas as pd
-from torch_geometric.data import HeteroData
+import networkx as nx
+from torch_geometric.data import Dataset, HeteroData
+from torch_geometric.utils import to_networkx
 
-# absolute import (installed package)
-from src.table_to_graph.utils import (
+from table_to_graph.pyg_utils import (
     CategoricalEncoder, OneHotEncoder, NumericalEncoder, PromoIntervalEncoder,
     load_node_csv, load_edge_csv
 )
-# TODO: can't get relative import to work
-# from .utils import (
-#     CategoricalEncoder, OneHotEncoder, NumericalEncoder, PromoIntervalEncoder,
-#     load_node_csv, load_edge_csv
-# )
+
+
 
 ###########################################################################################
 # code reference: https://pytorch-geometric.readthedocs.io/en/latest/tutorial/load_csv.html
@@ -81,6 +80,18 @@ def rossmann_to_graph(dir_path):
     return data
 
 
+def to_connected_components(data):
+    networkx_data = to_networkx(data, node_attrs=all)
+    
+    pass
+
+
+# TODO: wrap everything in a Dataset class
+class RossmannDataset(Dataset):
+    def __init__(self, root, transform=None, pre_transform=None, pre_filter=None, log=True):
+        super().__init__(root, transform, pre_transform, pre_filter, log)
+
+
 ###########################################################################################
 ###########################################################################################
 
@@ -90,6 +101,7 @@ def main():
     # root/data/rossmann
     dir_path = FILE_ABS_PATH.parent.parent.parent / "data" / "rossmann"
     data = rossmann_to_graph(dir_path)
+    data = to_connected_components(data)
 
 if __name__ == "__main__":
     main()
