@@ -11,12 +11,21 @@ FILE_ABS_PATH = pathlib.Path(__file__) # absolute path of this file
 
 ###########################################################################################
 
-def rossmann_to_nx_components(dir_path, train=True):
-    G, _ = rossmann_to_nx_graph(dir_path, train)
+# TODO: I don't think we want weakly connected components here... think about it more
+# def rossmann_to_nx_components(dir_path, train=True):
+#     G, _ = rossmann_to_nx_graph(dir_path, train)
+#     Gs = []
+#     for weekly_connected_component in nx.weakly_connected_components(G):
+#         # create a subgraph for each connected component
+#         Gs.append(G.subgraph(weekly_connected_component))
+#     return Gs
+
+def rossmann_to_nx_components(dir_path, parent_nodes):
+    G = rossmann_to_nx_graph(dir_path)
     Gs = []
-    for weekly_connected_component in nx.weakly_connected_components(G):
-        # create a subgraph for each connected component
-        Gs.append(G.subgraph(weekly_connected_component))
+    for parent_node in parent_nodes:
+        # TODO: 1 graph for each node in the parent table since we're doing 1:N
+        pass
     return Gs
 
 
