@@ -11,21 +11,13 @@ FILE_ABS_PATH = pathlib.Path(__file__) # absolute path of this file
 
 ###########################################################################################
 
-# TODO: I don't think we want weakly connected components here... think about it more
-# def rossmann_to_nx_components(dir_path, train=True):
-#     G, _ = rossmann_to_nx_graph(dir_path, train)
-#     Gs = []
-#     for weekly_connected_component in nx.weakly_connected_components(G):
-#         # create a subgraph for each connected component
-#         Gs.append(G.subgraph(weekly_connected_component))
-#     return Gs
-
-def rossmann_to_nx_components(dir_path, parent_nodes):
-    G = rossmann_to_nx_graph(dir_path)
+# with the assumptions that we're dealing with a 1:N relationship 
+# we can specify the parent nodes and get the connected components by looking at the descendants
+def rossmann_to_nx_components(G, parent_nodes):
     Gs = []
     for parent_node in parent_nodes:
-        # TODO: 1 graph for each node in the parent table since we're doing 1:N
-        pass
+        reachable_nodes = nx.descendants(G, parent_node).add(parent_node)
+        Gs.append(G.subgraph(reachable_nodes))
     return Gs
 
 
@@ -51,7 +43,12 @@ def rossmann_to_nx_graph(dir_path, train=True):
     
     # TODO: add node attributes
     
-    return G, sales_mapping
+    # get each component of the graph
+    Gs = rossmann_to_nx_components(G, store_df.index)
+    
+    return G, Gs
+
+
 
 ###########################################################################################
 
@@ -63,7 +60,8 @@ class RossmanDataset(Dataset):
 
 def main():
     dir_path = FILE_ABS_PATH.parent.parent.parent / "data" / "rossmann"
-    Gs = rossmann_to_nx_components(dir_path)
+    G, Gs = rossmann_to_nx_graph(dir_path)
+    pass
 
 
 if __name__ == "__main__":
