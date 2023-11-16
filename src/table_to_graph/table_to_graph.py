@@ -40,7 +40,7 @@ def rossman_to_graph(dir_path, train=True):
     store_sales_df["Store"] = sales_df["Store"].map(store_id_mapping)
     store_sales_df["Sale"] = sales_df.index.map(sales_id_mapping)
     
-    G = tables_to_graph(sales_df, source="Store", target="Sale")
+    G = tables_to_graph(store_sales_df, source="Store", target="Sale")
 
     return G
 
