@@ -40,9 +40,10 @@ def rossman_to_graph(dir_path, train=True):
     store_sales_df["Store"] = sales_df["Store"].map(store_id_mapping)
     store_sales_df["Sale"] = sales_df.index.map(sales_id_mapping)
     
+    root_nodes = store_sales_df["Store"].unique().tolist()
     G = tables_to_graph(store_sales_df, source="Store", target="Sale")
 
-    return G
+    return G, root_nodes
 
 
 # read in mutagenesis data and convert it to a graph
@@ -73,18 +74,35 @@ def mutagenesis_to_graph(dir_path):
     # combine the two graphs
     G_atom_to_bond = nx.compose(G_atom1_to_bond, G_atom2_to_bond)
     
+    
+    root_nodes = molecule_atom_df["Molecule"].unique().tolist()
     # combine the two bipartite components
     G = nx.compose(G_molecule_to_atom, G_atom_to_bond)
 
-    return G
+    return G, root_nodes
+
+
+# assume we have a parent table with 1:N relationship
+# -> we can split the graph by choosing the nodes in the parent table as root nodes and generating a tree for each root node
+# NOTE: we can imagine this as modeling the dataset tables as a list of connected rows
+def graph_to_subgraphs(G, root_nodes):
+    subgraphs = []
+    for root_node in root_nodes:
+        subgraph_nodes = nx.descendants(G, root_node)
+        subgraph_nodes.add(root_node) # add for sets works inplace
+        subgraphs.append(G.subgraph(subgraph_nodes))
+    return subgraphs
+
+
+###########################################################################################
 
 
 ###########################################################################################
 rossman_dir_path = FILE_ABS_PATH.parent.parent.parent / "data" / "rossmann"
 mutagenesis_dir_path = FILE_ABS_PATH.parent.parent.parent / "data" / "mutagenesis"
 
-ROSSMANN_GRAPH = rossman_to_graph(rossman_dir_path)
-MUTAGENESIS_GRAPH = mutagenesis_to_graph(mutagenesis_dir_path)
+ROSSMANN_GRAPH, ROSSMAN_ROOT_NODES = rossman_to_graph(rossman_dir_path)
+MUTAGENESIS_GRAPH, MUTAGENESIS_ROOT_NODES = mutagenesis_to_graph(mutagenesis_dir_path)
 ###########################################################################################
 
 def main():
