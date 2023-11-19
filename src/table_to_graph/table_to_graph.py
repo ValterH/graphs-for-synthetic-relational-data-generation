@@ -48,9 +48,9 @@ def rossman_to_graph(dir_path, train=True):
 
 # read in mutagenesis data and convert it to a graph
 def mutagenesis_to_graph(dir_path):
-    molecule_df = pd.read_csv(dir_path / "molecule.csv")
-    atom_df = pd.read_csv(dir_path / "atom.csv")
-    bond_df = pd.read_csv(dir_path / "bond.csv")
+    molecule_df = pd.read_csv(dir_path + "/molecule.csv")
+    atom_df = pd.read_csv(dir_path + "/atom.csv")
+    bond_df = pd.read_csv(dir_path + "/bond.csv")
     
     molecule_id_mapping = {molecule_id: i for i, molecule_id in enumerate(molecule_df["molecule_id"].unique())}
     atom_id_mapping = {atom_id: i + len(molecule_id_mapping) for i, atom_id in enumerate(atom_df["atom_id"].unique())}
@@ -61,6 +61,13 @@ def mutagenesis_to_graph(dir_path):
     molecule_atom_df["Molecule"] = atom_df["molecule_id"].map(molecule_id_mapping)
     molecule_atom_df["Atom"] = atom_df["atom_id"].map(atom_id_mapping)
     G_molecule_to_atom = tables_to_graph(molecule_atom_df, source="Molecule", target="Atom")
+
+    # Label molecules and atoms in G_molecule_to_atom
+    for node in G_molecule_to_atom.nodes():
+        if node in molecule_id_mapping.values():
+            G_molecule_to_atom.nodes[node]['y'] = 'molecule'
+        else:
+            G_molecule_to_atom.nodes[node]['y'] = 'atom'
 
     # second bipartite component
     atom_bond_df = pd.DataFrame()
@@ -73,6 +80,13 @@ def mutagenesis_to_graph(dir_path):
     G_atom2_to_bond = tables_to_graph(atom_bond_df, source="Atom2", target="Bond")
     # combine the two graphs
     G_atom_to_bond = nx.compose(G_atom1_to_bond, G_atom2_to_bond)
+
+    # Label atoms and bonds in G_atom_to_bond
+    for node in G_atom_to_bond.nodes():
+        if node in atom_id_mapping.values():
+            G_atom_to_bond.nodes[node]['y'] = 'atom'
+        else:
+            G_atom_to_bond.nodes[node]['y'] = 'bond'
     
     
     root_nodes = molecule_atom_df["Molecule"].unique().tolist()
