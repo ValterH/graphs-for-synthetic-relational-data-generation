@@ -142,8 +142,10 @@ def graph_to_subgraphs(G, root_nodes):
 rossman_dir_path = FILE_ABS_PATH.parent.parent.parent / "data" / "rossmann"
 mutagenesis_dir_path = FILE_ABS_PATH.parent.parent.parent / "data" / "mutagenesis"
 
-ROSSMANN_GRAPH, ROSSMAN_ROOT_NODES = rossman_to_graph(rossman_dir_path)
+ROSSMANN_GRAPH, ROSSMANN_ROOT_NODES = rossman_to_graph(rossman_dir_path)
 MUTAGENESIS_GRAPH, MUTAGENESIS_ROOT_NODES = mutagenesis_to_graph(mutagenesis_dir_path)
+
+ROSSMANN_TEST_GRAPH, ROSSMANN_TEST_ROOT_NODES = rossman_to_graph(rossman_dir_path, train=False)
 ###########################################################################################
 
 def main():
