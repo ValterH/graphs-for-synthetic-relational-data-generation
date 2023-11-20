@@ -89,4 +89,6 @@ target/
 # Mypy cache
 .mypy_cache/
 
-/synthetic
+# Models and data folders
+synthetic/
+models/
