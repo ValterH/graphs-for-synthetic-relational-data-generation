@@ -32,8 +32,8 @@ def tables_to_graph(df, source, target, source_attrs_df=None, target_attrs_df=No
 
 def rossman_to_graph(dir_path, train=True):
     # read in the data
-    store_df = pd.read_csv(dir_path / "store.csv")
-    sales_df = pd.read_csv(dir_path / "train.csv") if train else pd.read_csv(dir_path / "test.csv")
+    store_df = pd.read_csv(pathlib.Path(dir_path) / "store.csv")
+    sales_df = pd.read_csv(pathlib.Path(dir_path) / "train.csv") if train else pd.read_csv(pathlib.Path(dir_path) / "test.csv")
     
     # each store and sale has a unique id
     store_id_mapping = {store_id: i for i, store_id in enumerate(store_df["Store"].unique())}
@@ -67,9 +67,9 @@ def rossman_to_graph(dir_path, train=True):
 
 def mutagenesis_to_graph(dir_path):
     # read in the data
-    molecule_df = pd.read_csv(dir_path / "molecule.csv")
-    atom_df = pd.read_csv(dir_path / "atom.csv")
-    bond_df = pd.read_csv(dir_path / "bond.csv")
+    molecule_df = pd.read_csv(pathlib.Path(dir_path) / "molecule.csv")
+    atom_df = pd.read_csv(pathlib.Path(dir_path) / "atom.csv")
+    bond_df = pd.read_csv(pathlib.Path(dir_path) / "bond.csv")
     
     # each molecule, atom and bond has a unique id
     molecule_id_mapping = {molecule_id: i for i, molecule_id in enumerate(molecule_df["molecule_id"].unique())}
