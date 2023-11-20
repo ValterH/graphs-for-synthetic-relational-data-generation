@@ -8,88 +8,115 @@ SEED = 42
 FILE_ABS_PATH = pathlib.Path(__file__) # absolute path of this file
 ###########################################################################################
 
-# TODO:
-# 1. add features to all the nodes
-# 2. add the option to return the dataset as one big graph or a list of disconnected graphs
-# 3. ...
-
 
 # get a dataframe with source and target columns
 # the columns contain the id's of the nodes in the graph
-def tables_to_graph(df, source, target, directed=True):
+def tables_to_graph(df, source, target, source_attrs_df=None, target_attrs_df=None, directed=True):
     
-    # generate a graph from the dataframe
+    # generate graph from edge connections in the df
     create_using=nx.DiGraph() if directed else nx.Graph()
     G = nx.from_pandas_edgelist(df, source=source, target=target, create_using=create_using)
     
-    # TODO: features (if the df is a join of the two tables we can do it by specifying the source and target columns we want for features)
-    # TODO: disconnected graphs (figure out if we want strongly/weakly connected graphs or just all the reachable nodes from the source node in the parent table)
+    # add the atributes for source nodes
+    if (source_attrs_df is not None) and (not source_attrs_df.empty):
+        source_attrs_df = source_attrs_df.set_index(source)
+        G.add_nodes_from(source_attrs_df.to_dict('index').items())
+    
+    # add the atributes for target nodes
+    if (target_attrs_df is not None) and (not target_attrs_df.empty):
+        target_attrs_df = target_attrs_df.set_index(target)
+        G.add_nodes_from(target_attrs_df.to_dict('index').items())
     
     return G
 
 
-# read in rossmann data and convert it to a graph
 def rossman_to_graph(dir_path, train=True):
+    # read in the data
     store_df = pd.read_csv(dir_path / "store.csv")
     sales_df = pd.read_csv(dir_path / "train.csv") if train else pd.read_csv(dir_path / "test.csv")
     
+    # each store and sale has a unique id
     store_id_mapping = {store_id: i for i, store_id in enumerate(store_df["Store"].unique())}
     sales_id_mapping = {sales_id: i + len(store_id_mapping) for i, sales_id in enumerate(sales_df.index)}
     
+    # features for stores and sales
+    # TODO: create dataframes with encoded features that are useful
+    store_attrs_df = store_df
+    store_attrs_df["Store"] = store_df["Store"].map(store_id_mapping)
+    store_attrs_df["y"] = "store"
+    
+    sales_attrs_df = sales_df
+    sales_attrs_df["Sale"] = sales_df.index.map(sales_id_mapping)
+    sales_attrs_df = sales_attrs_df.drop(columns=["Store"])
+    sales_attrs_df["y"] = "sale"
+    
+    # edges between stores and sales
     store_sales_df = pd.DataFrame()
     store_sales_df["Store"] = sales_df["Store"].map(store_id_mapping)
     store_sales_df["Sale"] = sales_df.index.map(sales_id_mapping)
     
+    # root nodes (parent table)
     root_nodes = store_sales_df["Store"].unique().tolist()
-    G = tables_to_graph(store_sales_df, source="Store", target="Sale")
+    
+    # generate the graph
+    G = tables_to_graph(store_sales_df, source="Store", target="Sale", source_attrs_df=store_attrs_df, target_attrs_df=sales_attrs_df)
 
+    # return the graph and the root nodes
     return G, root_nodes
 
 
-# read in mutagenesis data and convert it to a graph
 def mutagenesis_to_graph(dir_path):
-    molecule_df = pd.read_csv(dir_path + "/molecule.csv")
-    atom_df = pd.read_csv(dir_path + "/atom.csv")
-    bond_df = pd.read_csv(dir_path + "/bond.csv")
+    # read in the data
+    molecule_df = pd.read_csv(dir_path / "molecule.csv")
+    atom_df = pd.read_csv(dir_path / "atom.csv")
+    bond_df = pd.read_csv(dir_path / "bond.csv")
     
+    # each molecule, atom and bond has a unique id
     molecule_id_mapping = {molecule_id: i for i, molecule_id in enumerate(molecule_df["molecule_id"].unique())}
     atom_id_mapping = {atom_id: i + len(molecule_id_mapping) for i, atom_id in enumerate(atom_df["atom_id"].unique())}
     bond_id_mapping = {bond_id: i + len(molecule_id_mapping) + len(atom_id_mapping) for i, bond_id in enumerate(bond_df.index)}
+    
+    # features for stores and sales
+    # TODO: create dataframes with encoded features that are useful
+    molecule_attrs_df = molecule_df
+    molecule_attrs_df["Molecule"] = molecule_df["molecule_id"].map(molecule_id_mapping)
+    molecule_attrs_df = molecule_attrs_df.drop(columns=["molecule_id"])
+    molecule_attrs_df["y"] = "molecule"
+    
+    atom_attrs_df = atom_df
+    atom_attrs_df["Atom"] = atom_df["atom_id"].map(atom_id_mapping)
+    atom_attrs_df = atom_attrs_df.drop(columns=["molecule_id", "atom_id"])
+    atom_attrs_df["y"] = "atom"
+    
+    bond_attrs_df = bond_df
+    bond_attrs_df["Bond"] = bond_df.index.map(bond_id_mapping)
+    bond_attrs_df = bond_attrs_df.drop(columns=["atom1_id", "atom2_id"])
+    bond_attrs_df["y"] = "bond"
+    
     
     # first bipartite component
     molecule_atom_df = pd.DataFrame()
     molecule_atom_df["Molecule"] = atom_df["molecule_id"].map(molecule_id_mapping)
     molecule_atom_df["Atom"] = atom_df["atom_id"].map(atom_id_mapping)
-    G_molecule_to_atom = tables_to_graph(molecule_atom_df, source="Molecule", target="Atom")
-
-    # Label molecules and atoms in G_molecule_to_atom
-    for node in G_molecule_to_atom.nodes():
-        if node in molecule_id_mapping.values():
-            G_molecule_to_atom.nodes[node]['y'] = 'molecule'
-        else:
-            G_molecule_to_atom.nodes[node]['y'] = 'atom'
+    G_molecule_to_atom = tables_to_graph(molecule_atom_df, source="Molecule", target="Atom", source_attrs_df=molecule_attrs_df, target_attrs_df=atom_attrs_df)
 
     # second bipartite component
     atom_bond_df = pd.DataFrame()
     atom_bond_df["Atom1"] = bond_df["atom1_id"].map(atom_id_mapping)
     atom_bond_df["Atom2"] = bond_df["atom2_id"].map(atom_id_mapping)
     atom_bond_df["Bond"] = bond_df.index.map(bond_id_mapping)
-    # connect atom1 to bond
-    G_atom1_to_bond = tables_to_graph(atom_bond_df, source="Atom1", target="Bond")
-    # connect atom2 to bond
-    G_atom2_to_bond = tables_to_graph(atom_bond_df, source="Atom2", target="Bond")
+    # connect atom1 and atom2 to bond
+    atom_attrs_df = atom_attrs_df.rename(columns={"Atom": "Atom1"})
+    G_atom1_to_bond = tables_to_graph(atom_bond_df, source="Atom1", target="Bond", source_attrs_df=atom_attrs_df, target_attrs_df=bond_attrs_df)
+    atom_attrs_df = atom_attrs_df.rename(columns={"Atom1": "Atom2"})
+    G_atom2_to_bond = tables_to_graph(atom_bond_df, source="Atom2", target="Bond", source_attrs_df=atom_attrs_df, target_attrs_df=bond_attrs_df)
+    atom_attrs_df = atom_attrs_df.rename(columns={"Atom2": "Atom"})
     # combine the two graphs
     G_atom_to_bond = nx.compose(G_atom1_to_bond, G_atom2_to_bond)
 
-    # Label atoms and bonds in G_atom_to_bond
-    for node in G_atom_to_bond.nodes():
-        if node in atom_id_mapping.values():
-            G_atom_to_bond.nodes[node]['y'] = 'atom'
-        else:
-            G_atom_to_bond.nodes[node]['y'] = 'bond'
-    
-    
+    # root nodes (parent table)
     root_nodes = molecule_atom_df["Molecule"].unique().tolist()
+    
     # combine the two bipartite components
     G = nx.compose(G_molecule_to_atom, G_atom_to_bond)
 
