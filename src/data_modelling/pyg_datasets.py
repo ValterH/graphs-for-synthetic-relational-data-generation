@@ -1,7 +1,7 @@
 import torch
 from torch_geometric.utils import from_networkx
 from torch_geometric.data import InMemoryDataset
-from src.table_to_graph.table_to_graph import graph_to_subgraphs
+from src.data_modelling.table_to_graph import graph_to_subgraphs
 
 ############################################################################################
 # reference: https://pytorch-geometric.readthedocs.io/en/latest/tutorial/create_dataset.html
@@ -32,12 +32,12 @@ class Mutagenesis(MyDataset):
 
 
 def get_rossmann_dataset():
-    from src.table_to_graph.table_to_graph import ROSSMANN_GRAPH, ROSSMAN_ROOT_NODES
-    rossmann_data_list = [from_networkx(subgraph) for subgraph in graph_to_subgraphs(ROSSMANN_GRAPH, ROSSMAN_ROOT_NODES)]
+    from src.data_modelling.table_to_graph import ROSSMANN_GRAPH, ROSSMANN_ROOT_NODES
+    rossmann_data_list = [from_networkx(subgraph) for subgraph in graph_to_subgraphs(ROSSMANN_GRAPH, ROSSMANN_ROOT_NODES)]
     return Rossmann(root="data/rossmann", data_list=rossmann_data_list)
 
 def get_mutagenesis_dataset():
-    from src.table_to_graph.table_to_graph import MUTAGENESIS_GRAPH, MUTAGENESIS_ROOT_NODES
+    from src.data_modelling.table_to_graph import MUTAGENESIS_GRAPH, MUTAGENESIS_ROOT_NODES
     mutagenesis_data_list = [from_networkx(subgraph) for subgraph in graph_to_subgraphs(MUTAGENESIS_GRAPH, MUTAGENESIS_ROOT_NODES)]
     return Mutagenesis(root="data/mutagenesis", data_list=mutagenesis_data_list)
 
