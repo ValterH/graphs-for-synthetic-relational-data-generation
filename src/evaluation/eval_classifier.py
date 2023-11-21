@@ -233,7 +233,7 @@ if __name__ == "__main__":
     if args.model == 'logistic':
         clf = LogisticRegression(solver='lbfgs', max_iter=100)
     elif args.model == 'xgboost':
-        clf = XGBClassifier()
+        clf = XGBClassifier(random_state=42)
     else:
         raise ValueError('Model not supported.')
     
