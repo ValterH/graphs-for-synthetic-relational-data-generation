@@ -104,10 +104,10 @@ class CustomHyperTransformer(HyperTransformer):
     
 
 def drop_ids(table, table_name, metadata):
-    for field, values in metadata.to_dict()['tables'][table_name].items():
+    for field, values in metadata.to_dict()['tables'][table_name]['fields'].items():
         if 'ref' in values:
             foreign_key = field
-            for column in table.columns():
+            for column in table.columns:
                 if foreign_key in column:
                     table.drop(column, axis=1, inplace=True)
     pk = metadata.get_primary_key(table_name)
@@ -130,6 +130,12 @@ def discriminative_detection(original_test, synthetic_test, original_train,
     transformed_original_test = transformed_original_test.reindex(column_names, axis=1)
     transformed_synthetic_train = transformed_synthetic_train.reindex(column_names, axis=1)
     transformed_synthetic_test = transformed_synthetic_test.reindex(column_names, axis=1)
+
+    if 'Date' in column_names:
+        transformed_original_train.drop('Date', axis=1, inplace=True)
+        transformed_synthetic_train.drop('Date', axis=1, inplace=True)
+        transformed_original_test.drop('Date', axis=1, inplace=True)
+        transformed_synthetic_test.drop('Date', axis=1, inplace=True)
 
     # resample original test and synthetic test to same size
     n = min(len(transformed_original_test), len(transformed_synthetic_test))
