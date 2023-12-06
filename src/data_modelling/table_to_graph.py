@@ -1,11 +1,14 @@
 import pathlib
-import numpy as np
 import pandas as pd
 import networkx as nx
 
 ###########################################################################################
 SEED = 42
 FILE_ABS_PATH = pathlib.Path(__file__) # absolute path of this file
+
+rossman_dir_path = FILE_ABS_PATH.parent.parent.parent / "data" / "rossmann"
+mutagenesis_dir_path = FILE_ABS_PATH.parent.parent.parent / "data" / "mutagenesis"
+
 ###########################################################################################
 
 
@@ -30,7 +33,7 @@ def tables_to_graph(df, source, target, source_attrs_df=None, target_attrs_df=No
     return G
 
 
-def rossman_to_graph(dir_path, train=True):
+def rossman_to_graph(dir_path=rossman_dir_path, train=True):
     # read in the data
     store_df = pd.read_csv(pathlib.Path(dir_path) / "store.csv")
     sales_df = pd.read_csv(pathlib.Path(dir_path) / "train.csv") if train else pd.read_csv(pathlib.Path(dir_path) / "test.csv")
@@ -65,7 +68,7 @@ def rossman_to_graph(dir_path, train=True):
     return G, root_nodes
 
 
-def mutagenesis_to_graph(dir_path):
+def mutagenesis_to_graph(dir_path=mutagenesis_dir_path):
     # read in the data
     molecule_df = pd.read_csv(pathlib.Path(dir_path) / "molecule.csv")
     atom_df = pd.read_csv(pathlib.Path(dir_path) / "atom.csv")
@@ -135,17 +138,77 @@ def graph_to_subgraphs(G, root_nodes):
     return subgraphs
 
 
-###########################################################################################
+def filter_graph_features_with_mapping(graph, features_to_keep, feature_mapping):
+    filtered_graph = nx.Graph()
+
+    for node, data in graph.nodes(data=True):
+        updated_features = {}
+        for feature in features_to_keep:
+            # Check if the feature needs mapping
+            if feature in feature_mapping:
+                # Map the feature value using the specified mapping
+                mapping = feature_mapping[feature]
+                updated_features[feature] = mapping.get(data.get(feature))
+            else:
+                # Keep the feature as is
+                updated_features[feature] = data.get(feature)
+
+        # Add a new node to the filtered graph with filtered features
+        filtered_graph.add_node(node, **updated_features)
+
+    # keep the connections between the nodes as they were
+    filtered_graph.add_edges_from(graph.edges())
+    
+    return filtered_graph
 
 
 ###########################################################################################
-rossman_dir_path = FILE_ABS_PATH.parent.parent.parent / "data" / "rossmann"
-mutagenesis_dir_path = FILE_ABS_PATH.parent.parent.parent / "data" / "mutagenesis"
 
-ROSSMANN_GRAPH, ROSSMANN_ROOT_NODES = rossman_to_graph(rossman_dir_path)
-MUTAGENESIS_GRAPH, MUTAGENESIS_ROOT_NODES = mutagenesis_to_graph(mutagenesis_dir_path)
+def get_rossmann_graph(rossmann_dir_path=rossman_dir_path, root_nodes=True, features=None, feature_mappings=None):
+    G_rossmann, rossmann_root_nodes = rossman_to_graph(rossmann_dir_path)
+    
+    # filter features
+    if features is not None:
+        G_rossmann = filter_graph_features_with_mapping(G_rossmann, features, feature_mappings)
+    
+    # also return the root nodes
+    if root_nodes:
+        return G_rossmann, rossmann_root_nodes
+    
+    return G_rossmann
 
-ROSSMANN_TEST_GRAPH, ROSSMANN_TEST_ROOT_NODES = rossman_to_graph(rossman_dir_path, train=False)
+
+def get_rossmann_subgraphs(rossmann_dir_path=rossman_dir_path, features=None, feature_mappings=None):
+    if features is None:
+        G_rossmann, rossmann_root_nodes = get_rossmann_graph(rossmann_dir_path, features=features, feature_mappings=feature_mappings)
+    else:
+        G_rossmann, rossmann_root_nodes = get_rossmann_graph(rossmann_dir_path, features=features, feature_mappings=feature_mappings)
+    
+    return graph_to_subgraphs(G_rossmann, rossmann_root_nodes)
+
+
+def get_mutagenesis_graph(mutagenesis_dir_path=mutagenesis_dir_path, root_nodes=True, features=None, feature_mappings=None):
+    G_mutagenesis, mutagenesis_root_nodes = mutagenesis_to_graph(mutagenesis_dir_path)
+    
+    # filter features
+    if features is not None:
+        G_mutagenesis = filter_graph_features_with_mapping(G_mutagenesis, features, feature_mappings)
+    
+    # also return the root nodes
+    if root_nodes:
+        return G_mutagenesis, mutagenesis_root_nodes
+    
+    return G_mutagenesis
+
+
+def get_mutagenesis_subgraphs(mutagenesis_dir_path=mutagenesis_dir_path, features=None, feature_mappings=None):
+    if features is None:
+        G_mutagenesis, mutagenesis_root_nodes = get_mutagenesis_graph(mutagenesis_dir_path, features=features, feature_mappings=feature_mappings)
+    else:
+        G_mutagenesis, mutagenesis_root_nodes = get_mutagenesis_graph(mutagenesis_dir_path, features=features, feature_mappings=feature_mappings)
+    
+    return graph_to_subgraphs(G_mutagenesis, mutagenesis_root_nodes)
+
 ###########################################################################################
 
 def main():
