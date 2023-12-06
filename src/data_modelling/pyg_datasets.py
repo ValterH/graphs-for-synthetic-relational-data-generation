@@ -1,3 +1,4 @@
+import torch
 from torch_geometric.utils import from_networkx
 from torch_geometric.data import InMemoryDataset
 
@@ -38,41 +39,84 @@ class Mutagenesis(MyDataset):
 
 ############################################################################################
 
-_ROSSMANN_FEATURES_TO_KEEP_GIN = ["y"]
-_ROSSMANN_FEATURE_MAPPING_GIN = {"y": {"store": 0, "sale": 1}}
-_MUTAGENESIS_FEATURES_TO_KEEP_GIN = ["y"]
-_MUTAGENESIS_FEATURE_MAPPING_GIN = {"y": {"molecule": 0, "atom": 1, "bond": 2}}
+_ROSSMANN_FEATURES_TO_KEEP_GIN = ["type", "degree"]
+_ROSSMANN_FEATURE_MAPPING_GIN = {"type": {"store": 0, "sale": 1}}
+_MUTAGENESIS_FEATURES_TO_KEEP_GIN = ["type", "degree"]
+_MUTAGENESIS_FEATURE_MAPPING_GIN = {"type": {"molecule": 0, "atom": 1, "bond": 2}}
 
-def get_rossmann_dataset(root="data/rossmann/pyg", features=_ROSSMANN_FEATURES_TO_KEEP_GIN, feature_mappings=_ROSSMANN_FEATURE_MAPPING_GIN):
+def get_rossmann_dataset(root="data/rossmann/pyg", features=_ROSSMANN_FEATURES_TO_KEEP_GIN, feature_mappings=_ROSSMANN_FEATURE_MAPPING_GIN, target=True):
     
     G = get_rossmann_graph(root_nodes=False, features=features, feature_mappings=feature_mappings)
     rossmann_data_list = [from_networkx(G, group_node_attrs=features)]
+    # we assume that the target is the last feature
+    # from_networkx doesn't support specifying the target so we have to do it manually
+    if target:
+        for data in rossmann_data_list:
+            data.y = data.x[:, -1].view(-1, 1).type(torch.float)
+            data.x = data.x[:, :-1].type(torch.float)
     
-    return Rossmann(root=root, data_list=rossmann_data_list)
+    # TODO: if we already have saved files this will not update them
+    # process() should do it afaik but its not working ...
+    rossmann = Rossmann(root=root, data_list=rossmann_data_list)
+    rossmann.process()
+    return rossmann
 
 
-def get_rossmann_subgraphs_dataset(root="data/rossmann/pyg_subgraphs", features=_ROSSMANN_FEATURES_TO_KEEP_GIN, feature_mappings=_ROSSMANN_FEATURE_MAPPING_GIN):
+def get_rossmann_subgraphs_dataset(root="data/rossmann/pyg_subgraphs", features=_ROSSMANN_FEATURES_TO_KEEP_GIN, feature_mappings=_ROSSMANN_FEATURE_MAPPING_GIN, target=True):
     
     subgraphs = get_rossmann_subgraphs(features=features, feature_mappings=feature_mappings)
     rossmann_data_list = [from_networkx(G, group_node_attrs=features) for G in  subgraphs]
     
-    return Rossmann(root=root, data_list=rossmann_data_list)
+    # we assume that the target is the last feature
+    # from_networkx doesn't support specifying the target so we have to do it manually
+    if target:
+        for data in rossmann_data_list:
+            data.y = data.x[:, -1].view(-1, 1).type(torch.float)
+            data.x = data.x[:, :-1].type(torch.float)
+    
+    # TODO: if we already have saved files this will not update them
+    # process() should do it afaik but its not working ...
+    rossmann = Rossmann(root=root, data_list=rossmann_data_list)
+    rossmann.process()
+    return rossmann
 
 
-def get_mutagenesis_dataset(root="data/mutagenesis/pyg", features=_MUTAGENESIS_FEATURES_TO_KEEP_GIN, feature_mappings=_MUTAGENESIS_FEATURE_MAPPING_GIN):
-        
-        G = get_mutagenesis_graph(root_nodes=False, features=features, feature_mappings=feature_mappings)
-        mutagenesis_data_list = [from_networkx(G, group_node_attrs=features)]
-        
-        return Mutagenesis(root=root, data_list=mutagenesis_data_list)
+def get_mutagenesis_dataset(root="data/mutagenesis/pyg", features=_MUTAGENESIS_FEATURES_TO_KEEP_GIN, feature_mappings=_MUTAGENESIS_FEATURE_MAPPING_GIN, target=True):
+    
+    G = get_mutagenesis_graph(root_nodes=False, features=features, feature_mappings=feature_mappings)
+    mutagenesis_data_list = [from_networkx(G, group_node_attrs=features)]
+    
+    # we assume that the target is the last feature
+    # from_networkx doesn't support specifying the target so we have to do it manually
+    if target:
+        for data in mutagenesis_data_list:
+            data.y = data.x[:, -1].view(-1, 1).type(torch.float)
+            data.x = data.x[:, :-1].type(torch.float)
+    
+    # TODO: if we already have saved files this will not update them
+    # process() should do it afaik but its not working ...
+    mutagenesis = Mutagenesis(root=root, data_list=mutagenesis_data_list)
+    mutagenesis.process()
+    return mutagenesis
 
 
-def get_mutagenesis_subgraphs_dataset(root="data/mutagenesis/pyg_subgraphs", features=_MUTAGENESIS_FEATURES_TO_KEEP_GIN, feature_mappings=_MUTAGENESIS_FEATURE_MAPPING_GIN):
+def get_mutagenesis_subgraphs_dataset(root="data/mutagenesis/pyg_subgraphs", features=_MUTAGENESIS_FEATURES_TO_KEEP_GIN, feature_mappings=_MUTAGENESIS_FEATURE_MAPPING_GIN, target=True):
     
     subgraphs = get_mutagenesis_subgraphs(features=features, feature_mappings=feature_mappings)
     mutagenesis_data_list = [from_networkx(G, group_node_attrs=features) for G in subgraphs]
     
-    return Mutagenesis(root=root, data_list=mutagenesis_data_list)
+    # we assume that the target is the last feature
+    # from_networkx doesn't support specifying the target so we have to do it manually
+    if target:
+        for data in mutagenesis_data_list:
+            data.y = data.x[:, -1].view(-1, 1).type(torch.float)
+            data.x = data.x[:, :-1].type(torch.float)
+    
+    # TODO: if we already have saved files this will not update them
+    # process() should do it afaik but its not working ...
+    mutagenesis = Mutagenesis(root=root, data_list=mutagenesis_data_list)
+    mutagenesis.process()
+    return mutagenesis
 
 ############################################################################################
 

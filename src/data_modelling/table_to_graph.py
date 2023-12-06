@@ -46,12 +46,12 @@ def rossman_to_graph(dir_path=rossman_dir_path, train=True):
     # TODO: create dataframes with encoded features that are useful
     store_attrs_df = store_df
     store_attrs_df["Store"] = store_df["Store"].map(store_id_mapping)
-    store_attrs_df["y"] = "store"
+    store_attrs_df["type"] = "store"
     
     sales_attrs_df = sales_df
     sales_attrs_df["Sale"] = sales_df.index.map(sales_id_mapping)
     sales_attrs_df = sales_attrs_df.drop(columns=["Store"])
-    sales_attrs_df["y"] = "sale"
+    sales_attrs_df["type"] = "sale"
     
     # edges between stores and sales
     store_sales_df = pd.DataFrame()
@@ -64,7 +64,10 @@ def rossman_to_graph(dir_path=rossman_dir_path, train=True):
     # generate the graph
     G = tables_to_graph(store_sales_df, source="Store", target="Sale", source_attrs_df=store_attrs_df, target_attrs_df=sales_attrs_df)
 
-    # return the graph and the root nodes
+    # add node degree as a feature
+    degrees = dict(G.degree())
+    nx.set_node_attributes(G, degrees, "degree")
+    
     return G, root_nodes
 
 
@@ -84,17 +87,17 @@ def mutagenesis_to_graph(dir_path=mutagenesis_dir_path):
     molecule_attrs_df = molecule_df
     molecule_attrs_df["Molecule"] = molecule_df["molecule_id"].map(molecule_id_mapping)
     molecule_attrs_df = molecule_attrs_df.drop(columns=["molecule_id"])
-    molecule_attrs_df["y"] = "molecule"
+    molecule_attrs_df["type"] = "molecule"
     
     atom_attrs_df = atom_df
     atom_attrs_df["Atom"] = atom_df["atom_id"].map(atom_id_mapping)
     atom_attrs_df = atom_attrs_df.drop(columns=["molecule_id", "atom_id"])
-    atom_attrs_df["y"] = "atom"
+    atom_attrs_df["type"] = "atom"
     
     bond_attrs_df = bond_df
     bond_attrs_df["Bond"] = bond_df.index.map(bond_id_mapping)
     bond_attrs_df = bond_attrs_df.drop(columns=["atom1_id", "atom2_id"])
-    bond_attrs_df["y"] = "bond"
+    bond_attrs_df["type"] = "bond"
     
     
     # first bipartite component
@@ -122,6 +125,10 @@ def mutagenesis_to_graph(dir_path=mutagenesis_dir_path):
     
     # combine the two bipartite components
     G = nx.compose(G_molecule_to_atom, G_atom_to_bond)
+    
+    # add node degree as a feature
+    degrees = dict(G.degree())
+    nx.set_node_attributes(G, degrees, "degree")
 
     return G, root_nodes
 
