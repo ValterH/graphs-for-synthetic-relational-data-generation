@@ -52,8 +52,8 @@ def read_original_tables(dataset_name):
 
 
 def split_table(table, seed=42):
-    table_train = table.sample(frac=0.8, random_state=seed)
-    table_test = table.drop(table_train.index)
+    table_train = table.copy()
+    table_test = table.sample(frac=0.2, random_state=seed)
     return table_train, table_test
 
 
@@ -63,6 +63,7 @@ def save_tables(tables, dataset_name, split, data_type='original'):
         if not os.path.exists(os.path.dirname(table_path)):
             os.makedirs(os.path.dirname(table_path))
         table.to_csv(table_path, index=False)
+
 
 def load_tables(dataset_name, split, data_type='original'):
     tables = {}
@@ -97,6 +98,7 @@ def find_fk(parent, reference, metadata):
         if field in reference:
             return field
     return None
+
 
 def merge_children(tables, metadata, root, how="left"):
     parent = tables[root]
