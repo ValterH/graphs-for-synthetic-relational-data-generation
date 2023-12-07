@@ -1,8 +1,45 @@
 import os
 
 import pandas as pd
-from rike.utils import conditionally_sample
-from rike.generation import sdv_metadata
+from sdv import Metadata
+
+ROOT_DIR = 'graphs-for-synthetic-relational-data-generation'
+
+def load_metadata(dataset_name):
+    # get project root directory
+    root_dir = os.getcwd().split(ROOT_DIR)[0] + ROOT_DIR
+    path = os.path.join(root_dir, 'data', 'metadata', f'{dataset_name}_metadata.json')
+    return Metadata(path)
+
+
+def get_root_table(dataset_name):
+    if dataset_name == "biodegradability":
+        return "molecule"
+    if dataset_name == "rossmann-store-sales":
+        return "store"
+    if dataset_name == "mutagenesis":
+        return "molecule"
+    if dataset_name == "coupon-purchase-prediction":
+        return "user_list"
+    if dataset_name == "telstra-competition-dataset":
+        return "train"
+    raise ValueError(f"Dataset {dataset_name} not supported")
+
+
+def conditionally_sample(tables, metadata, root):
+    parent = tables[root]
+    children = metadata.get_children(root)
+    for child in children:
+        child_table = tables[child]
+        fks = metadata.get_foreign_keys(root, child)
+        for fk in fks:
+            parent_fk = find_fk(root, fk, metadata)
+            if parent_fk is None:
+                continue
+            parent_ids = parent[parent_fk].unique()
+            tables[child] = child_table[child_table[fk].isin(parent_ids)]
+            tables = conditionally_sample(tables, metadata, child)
+    return tables
 
 
 def read_original_tables(dataset_name):
@@ -18,6 +55,7 @@ def split_table(table, seed=42):
     table_train = table.sample(frac=0.8, random_state=seed)
     table_test = table.drop(table_train.index)
     return table_train, table_test
+
 
 def save_tables(tables, dataset_name, split, data_type='original'):
     for table_name, table in tables.items():
@@ -40,8 +78,8 @@ def load_tables(dataset_name, split, data_type='original'):
 
 def prepare_dataset(dataset_name, seed=42):
     tables = read_original_tables(dataset_name)
-    metadata = sdv_metadata.generate_metadata(dataset_name, tables)
-    root_table = sdv_metadata.get_root_table(dataset_name)
+    metadata = load_metadata(dataset_name)
+    root_table = get_root_table(dataset_name)
 
     tables_train = {table_name: table.copy() for table_name, table in tables.items()}
     tables_test = {table_name: table.copy() for table_name, table in tables.items()}
