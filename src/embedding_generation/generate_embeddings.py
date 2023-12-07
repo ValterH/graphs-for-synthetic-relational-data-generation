@@ -1,44 +1,48 @@
 import pathlib
 import json
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.decomposition import PCA
 import torch
 import torch.nn as nn
-from torch_geometric.utils import from_networkx
-
-from src.embedding_generation.gin import GINModel, mutagenesis_to_graph_1
+from torch_geometric.utils import from_networkx, get_embeddings
 
 
-def convert_networkx_to_pyg(graph):
-    # Convert NetworkX graph to PyG Data object
-    data = from_networkx(graph)
+# pyg implemenation of GIN (need to specify the model architecture when instantiating)
+from torch_geometric.nn.models import GIN
+# custom GIN with 2 layers
+from src.embedding_generation.GINModel import GINModel
+from src.data_modelling.pyg_datasets import (
+    # get_rossmann_dataset,
+    # get_rossmann_subgraphs_dataset,
+    get_mutagenesis_dataset,
+    get_mutagenesis_subgraphs_dataset
+)
 
-    # Extract node features 'y' from NetworkX graph and convert to tensor
-    features = []
-    node_id_mapping = {}  # Mapping of node IDs to their indices
-    for i, (node_id, node_data) in enumerate(graph.nodes(data=True)):
-        features.append([node_data['y']])
-        node_id_mapping[node_id] = i  # Map the original node ID to its index
-    data.x = torch.tensor(features, dtype=torch.float)
+############################################################################################
 
-    # Calculate and add node degrees
-    degrees = [val for _, val in graph.degree()]
-    data.y = torch.tensor(degrees, dtype=torch.float).view(-1, 1)
+# rossmann_dataset = get_rossmann_dataset()
+# rossmann_subgraph_dataset = get_rossmann_subgraphs_dataset()
 
-    return data, node_id_mapping
+mutagenesis_dataset = get_mutagenesis_dataset()
+# mutagenesis_subgraph_dataset = get_mutagenesis_subgraphs_dataset()
 
 
-G1, G1_roots = mutagenesis_to_graph_1("data/mutagenesis") # NOTE: relative to root of the project
+# TODO: how should we actually train
+# take the whole graph for now
+data = mutagenesis_dataset[0]
+############################################################################################
 
-# get data from our graph
-data, node_mapping = convert_networkx_to_pyg(G1)
 
-# Assuming each node has one feature
-model = GINModel(num_features=1)
+# model = GINModel(num_features=1)
+
+model = GIN(in_channels=1, hidden_channels=32, num_layers=2, out_channels=1, jk="last")
+
 optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 loss_func = nn.MSELoss()
-epochs = 200
+# epochs = 200
+epochs = 500
 
-
-# Training loop
 for epoch in range(epochs):
     model.train()
     optimizer.zero_grad()
@@ -46,33 +50,68 @@ for epoch in range(epochs):
     loss = loss_func(out, data.y)
     loss.backward()
     optimizer.step()
-
+    
     if epoch % 10 == 0:
         print(f"Epoch {epoch}, Loss: {loss.item()}")
 
 
-# Extract embeddings after the final epoch
+# model.eval()
+# with torch.no_grad():
+#     embeddings = model(data.x, data.edge_index, return_embeds=True)
+
+
 model.eval()
 with torch.no_grad():
-    embeddings = model(data.x, data.edge_index, return_embeds=True)
+    embeddings = get_embeddings(model, data.x, data.edge_index)
+    last_layer_embeddings = embeddings[-1]
+pass
+
+moluecule_embeddings = last_layer_embeddings[data.x[:, 0] == 0]
+atom_embeddings = last_layer_embeddings[data.x[:, 0] == 1]
+bond_embeddings = last_layer_embeddings[data.x[:, 0] == 2]
+
+pass
+
+############################################################################################
+
+# # Convert tensor embeddings to lists for JSON serialization
+# root_embeddings_serializable = {node_id: embedding.tolist() for node_id, embedding in root_embeddings.items()}
 
 
-root_embeddings = {}
-for node_id in G1:
-    node_index = node_mapping[node_id]
-    embedding = embeddings[node_index]
-    root_embeddings[node_id] = embedding
+# # Define the file path
+# file_path = "src/embedding_generation/root_embeddings.json"
+
+# # Save to a JSON file
+# with open(file_path, 'w') as f:
+#     json.dump(root_embeddings_serializable, f)
+
+# print(f"Saved embeddings to {file_path}")
+
+############################################################################################
 
 
-# Convert tensor embeddings to lists for JSON serialization
-root_embeddings_serializable = {node_id: embedding.tolist() for node_id, embedding in root_embeddings.items()}
+# Convert embeddings to a numpy array
+embeddings_array = last_layer_embeddings.cpu().numpy()
 
+# Perform PCA
+pca = PCA(n_components=2)  # You can adjust the number of components as needed
+embeddings_pca = pca.fit_transform(embeddings_array)
 
-# Define the file path
-file_path = "src/embedding_generation/root_embeddings.json"
+# Visualization
+plt.figure(figsize=(8, 6))
 
-# Save to a JSON file
-with open(file_path, 'w') as f:
-    json.dump(root_embeddings_serializable, f)
+pca_0_x, pca_0_y = embeddings_pca[data.x[:, 0] == 0, 0], embeddings_pca[data.x[:, 0] == 0, 1]
+pca_1_x, pca_1_y = embeddings_pca[data.x[:, 0] == 1, 0], embeddings_pca[data.x[:, 0] == 1, 1]
+pca_2_x, pca_2_y = embeddings_pca[data.x[:, 0] == 2, 0], embeddings_pca[data.x[:, 0] == 2, 1]
 
-print(f"Saved embeddings to {file_path}")
+plt.scatter(pca_0_x, pca_0_y, alpha=0.5, label="Molecule", color="red")
+plt.scatter(pca_1_x, pca_1_y, alpha=0.5, label="Atom", color="blue")
+plt.scatter(pca_2_x, pca_2_y, alpha=0.5, label="Bond", color="green")
+
+# plt.scatter(embeddings_pca[:, 0], embeddings_pca[:, 1], alpha=0.5)
+plt.title('PCA Visualization of Embeddings')
+plt.xlabel('Principal Component 1')
+plt.ylabel('Principal Component 2')
+plt.show()
+
+pass
