@@ -33,7 +33,7 @@ def tables_to_graph(df, source, target, source_attrs_df=None, target_attrs_df=No
     return G
 
 
-def rossman_to_graph(dir_path=rossman_dir_path, train=True):
+def rossman_to_graph(dir_path=rossman_dir_path, train=True, k_hop=1):
     # read in the data
     store_df = pd.read_csv(pathlib.Path(dir_path) / "store.csv")
     sales_df = pd.read_csv(pathlib.Path(dir_path) / "train.csv") if train else pd.read_csv(pathlib.Path(dir_path) / "test.csv")
@@ -65,13 +65,17 @@ def rossman_to_graph(dir_path=rossman_dir_path, train=True):
     G = tables_to_graph(store_sales_df, source="Store", target="Sale", source_attrs_df=store_attrs_df, target_attrs_df=sales_attrs_df)
 
     # add node degree as a feature
-    degrees = dict(G.degree())
-    nx.set_node_attributes(G, degrees, "degree")
+    # degrees = dict(G.degree())
+    # nx.set_node_attributes(G, degrees, "degree")
+    
+    # add k-hop degrees as features
+    k_hop_degrees = all_nodes_k_hop_degrees(G, k=k_hop)
+    nx.set_node_attributes(G, k_hop_degrees, "k-hop_degrees")
     
     return G, root_nodes
 
 
-def mutagenesis_to_graph(dir_path=mutagenesis_dir_path):
+def mutagenesis_to_graph(dir_path=mutagenesis_dir_path, k_hop=2):
     # read in the data
     molecule_df = pd.read_csv(pathlib.Path(dir_path) / "molecule.csv")
     atom_df = pd.read_csv(pathlib.Path(dir_path) / "atom.csv")
@@ -127,10 +131,29 @@ def mutagenesis_to_graph(dir_path=mutagenesis_dir_path):
     G = nx.compose(G_molecule_to_atom, G_atom_to_bond)
     
     # add node degree as a feature
-    degrees = dict(G.degree())
-    nx.set_node_attributes(G, degrees, "degree")
+    # degrees = dict(G.degree())
+    # nx.set_node_attributes(G, degrees, "degree")
+    
+    # add k-hop degrees as features
+    k_hop_degrees = all_nodes_k_hop_degrees(G, k=k_hop)
+    nx.set_node_attributes(G, k_hop_degrees, "k-hop_degrees")
 
     return G, root_nodes
+
+
+def all_nodes_k_hop_degrees(graph, k, undirected=True):
+    if undirected:
+        graph = graph.to_undirected()
+    all_k_hop_degrees = {}
+    for node in graph.nodes():
+        all_k_hop_degrees[node] = k_hop_degrees(graph, node, k)
+    return all_k_hop_degrees
+
+
+def k_hop_degrees(graph, node, k):
+    k_hop_neighbors = nx.single_source_shortest_path_length(graph, node, cutoff=k)
+    k_hop_degrees = [list(k_hop_neighbors.values()).count(i) for i in range(1, k + 1)]
+    return k_hop_degrees
 
 
 # assume we have a parent table with 1:N relationship
