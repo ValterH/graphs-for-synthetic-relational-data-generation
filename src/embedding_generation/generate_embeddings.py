@@ -13,8 +13,8 @@ from torch_geometric.nn.models import GIN
 # custom GIN with 2 layers
 from src.embedding_generation.GINModel import GINModel
 from src.data_modelling.pyg_datasets import (
-    # get_rossmann_dataset,
-    # get_rossmann_subgraphs_dataset,
+    get_rossmann_dataset,
+    get_rossmann_subgraphs_dataset,
     get_mutagenesis_dataset,
     get_mutagenesis_subgraphs_dataset
 )
@@ -27,6 +27,7 @@ from src.data_modelling.pyg_datasets import (
 mutagenesis_dataset = get_mutagenesis_dataset()
 # mutagenesis_subgraph_dataset = get_mutagenesis_subgraphs_dataset()
 
+pass
 
 # TODO: how should we actually train
 # take the whole graph for now

@@ -2,13 +2,10 @@ import pathlib
 import pandas as pd
 import networkx as nx
 
+from src.data.utils import load_tables
+
 ###########################################################################################
 SEED = 42
-FILE_ABS_PATH = pathlib.Path(__file__) # absolute path of this file
-
-rossman_dir_path = FILE_ABS_PATH.parent.parent.parent / "data" / "rossmann"
-mutagenesis_dir_path = FILE_ABS_PATH.parent.parent.parent / "data" / "mutagenesis"
-
 ###########################################################################################
 
 
@@ -33,10 +30,11 @@ def tables_to_graph(df, source, target, source_attrs_df=None, target_attrs_df=No
     return G
 
 
-def rossman_to_graph(dir_path=rossman_dir_path, train=True, k_hop=1):
+def rossman_to_graph(k_hop=1):
     # read in the data
-    store_df = pd.read_csv(pathlib.Path(dir_path) / "store.csv")
-    sales_df = pd.read_csv(pathlib.Path(dir_path) / "train.csv") if train else pd.read_csv(pathlib.Path(dir_path) / "test.csv")
+    tables = load_tables("rossmann-store-sales", "train")
+    store_df = tables["store"]
+    sales_df = tables["test"]
     
     # each store and sale has a unique id
     store_id_mapping = {store_id: i for i, store_id in enumerate(store_df["Store"].unique())}
@@ -63,10 +61,14 @@ def rossman_to_graph(dir_path=rossman_dir_path, train=True, k_hop=1):
     
     # generate the graph
     G = tables_to_graph(store_sales_df, source="Store", target="Sale", source_attrs_df=store_attrs_df, target_attrs_df=sales_attrs_df)
-
-    # add node degree as a feature
-    # degrees = dict(G.degree())
-    # nx.set_node_attributes(G, degrees, "degree")
+    
+    
+    ###########################################################
+    # additional features, feature engineering
+    
+    # add node index as a feature (need because of pyg stuff)
+    id_dict = {id: id for id in G.nodes()}
+    nx.set_node_attributes(G, id_dict, "index")
     
     # add k-hop degrees as features
     k_hop_degrees = all_nodes_k_hop_degrees(G, k=k_hop)
@@ -75,11 +77,12 @@ def rossman_to_graph(dir_path=rossman_dir_path, train=True, k_hop=1):
     return G, root_nodes
 
 
-def mutagenesis_to_graph(dir_path=mutagenesis_dir_path, k_hop=2):
+def mutagenesis_to_graph(k_hop=2):
     # read in the data
-    molecule_df = pd.read_csv(pathlib.Path(dir_path) / "molecule.csv")
-    atom_df = pd.read_csv(pathlib.Path(dir_path) / "atom.csv")
-    bond_df = pd.read_csv(pathlib.Path(dir_path) / "bond.csv")
+    tables = load_tables("mutagenesis", "train")
+    molecule_df = tables["molecule"]
+    atom_df = tables["atom"]
+    bond_df = tables["bond"]
     
     # each molecule, atom and bond has a unique id
     molecule_id_mapping = {molecule_id: i for i, molecule_id in enumerate(molecule_df["molecule_id"].unique())}
@@ -130,9 +133,13 @@ def mutagenesis_to_graph(dir_path=mutagenesis_dir_path, k_hop=2):
     # combine the two bipartite components
     G = nx.compose(G_molecule_to_atom, G_atom_to_bond)
     
-    # add node degree as a feature
-    # degrees = dict(G.degree())
-    # nx.set_node_attributes(G, degrees, "degree")
+    
+    ###########################################################
+    # additional features, feature engineering
+    
+    # add node index as a feature (need because of pyg stuff)
+    id_dict = {id: id for id in G.nodes()}
+    nx.set_node_attributes(G, id_dict, "index")
     
     # add k-hop degrees as features
     k_hop_degrees = all_nodes_k_hop_degrees(G, k=k_hop)
@@ -194,8 +201,8 @@ def filter_graph_features_with_mapping(graph, features_to_keep, feature_mapping)
 
 ###########################################################################################
 
-def get_rossmann_graph(rossmann_dir_path=rossman_dir_path, root_nodes=True, features=None, feature_mappings=None):
-    G_rossmann, rossmann_root_nodes = rossman_to_graph(rossmann_dir_path)
+def get_rossmann_graph(root_nodes=True, features=None, feature_mappings=None):
+    G_rossmann, rossmann_root_nodes = rossman_to_graph()
     
     # filter features
     if features is not None:
@@ -208,17 +215,17 @@ def get_rossmann_graph(rossmann_dir_path=rossman_dir_path, root_nodes=True, feat
     return G_rossmann
 
 
-def get_rossmann_subgraphs(rossmann_dir_path=rossman_dir_path, features=None, feature_mappings=None):
+def get_rossmann_subgraphs(features=None, feature_mappings=None):
     if features is None:
-        G_rossmann, rossmann_root_nodes = get_rossmann_graph(rossmann_dir_path, features=features, feature_mappings=feature_mappings)
+        G_rossmann, rossmann_root_nodes = get_rossmann_graph(features=features, feature_mappings=feature_mappings)
     else:
-        G_rossmann, rossmann_root_nodes = get_rossmann_graph(rossmann_dir_path, features=features, feature_mappings=feature_mappings)
+        G_rossmann, rossmann_root_nodes = get_rossmann_graph(features=features, feature_mappings=feature_mappings)
     
     return graph_to_subgraphs(G_rossmann, rossmann_root_nodes)
 
 
-def get_mutagenesis_graph(mutagenesis_dir_path=mutagenesis_dir_path, root_nodes=True, features=None, feature_mappings=None):
-    G_mutagenesis, mutagenesis_root_nodes = mutagenesis_to_graph(mutagenesis_dir_path)
+def get_mutagenesis_graph(root_nodes=True, features=None, feature_mappings=None):
+    G_mutagenesis, mutagenesis_root_nodes = mutagenesis_to_graph()
     
     # filter features
     if features is not None:
@@ -231,11 +238,11 @@ def get_mutagenesis_graph(mutagenesis_dir_path=mutagenesis_dir_path, root_nodes=
     return G_mutagenesis
 
 
-def get_mutagenesis_subgraphs(mutagenesis_dir_path=mutagenesis_dir_path, features=None, feature_mappings=None):
+def get_mutagenesis_subgraphs(features=None, feature_mappings=None):
     if features is None:
-        G_mutagenesis, mutagenesis_root_nodes = get_mutagenesis_graph(mutagenesis_dir_path, features=features, feature_mappings=feature_mappings)
+        G_mutagenesis, mutagenesis_root_nodes = get_mutagenesis_graph(features=features, feature_mappings=feature_mappings)
     else:
-        G_mutagenesis, mutagenesis_root_nodes = get_mutagenesis_graph(mutagenesis_dir_path, features=features, feature_mappings=feature_mappings)
+        G_mutagenesis, mutagenesis_root_nodes = get_mutagenesis_graph(features=features, feature_mappings=feature_mappings)
     
     return graph_to_subgraphs(G_mutagenesis, mutagenesis_root_nodes)
 
