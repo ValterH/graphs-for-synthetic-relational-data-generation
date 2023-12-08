@@ -101,7 +101,7 @@ def train_diff(train_z, train_z_cond, ckpt_path, epochs=4000, is_cond=False, dev
     print('Time: ', end_time - start_time)
 
 
-def sample_diff(dataname, is_cond=True, device='cuda:0', num_samples=None, foreign_keys=None):
+def sample_diff(dataname, is_cond=True, device='cuda:0', num_samples=None, foreign_keys=None, ids=None):
 
     if is_cond:
         cond_embedding_save_path = f'ckpt/{dataname}/gen/cond_z.npy'
@@ -110,9 +110,13 @@ def sample_diff(dataname, is_cond=True, device='cuda:0', num_samples=None, forei
         B, in_dim_cond = train_z_cond.size()
         train_z_cond = train_z_cond.view(B, in_dim_cond).to(device)
         num_samples = B
+        if ids is None:
+            ids = np.arange(num_samples)
     else:
         train_z_cond = None
         in_dim_cond = None
+        if ids is None:
+            ids = np.arange(num_samples)
 
 
     train_z, _, ckpt_path, info, num_inverse, cat_inverse = get_input_generate(dataname)
@@ -158,7 +162,7 @@ def sample_diff(dataname, is_cond=True, device='cuda:0', num_samples=None, forei
         # add to the end of the dataframe
         syn_df.insert(len(syn_df.columns), fk, fk_values)
     # add id column
-    syn_df.insert(info['id_col_idx'], info['id_col_name'], range(0, len(syn_df))) 
+    syn_df.insert(info['id_col_idx'], info['id_col_name'], ids) 
     
     end_time = time.time()
     print('Time:', end_time - start_time)

@@ -1,3 +1,4 @@
+import os
 import json
 
 import numpy as np
@@ -11,9 +12,12 @@ from src.data.utils import load_tables, load_metadata
 from src.embedding_generation.generate_embeddings import get_rossmann_embeddings
 
 def main():
+    # args: HARDCODED for now TODO
+    dataset_name = 'rossmann-store-sales'
+    retrain_vae = False
     # read data
-    metadata = load_metadata('rossmann-store-sales')
-    tables = load_tables('rossmann-store-sales', 'train')
+    metadata = load_metadata(dataset_name)
+    tables = load_tables(dataset_name, 'train')
     # create graph
     # train GIN and compute structural embeddings using GIN
     print('Training GIN')
@@ -26,8 +30,11 @@ def main():
         with open(info_path, 'r') as f:
             info = json.load(f)
         X_num, X_cat, categories, d_numerical = preprocess(data_dir, task_type = 'binclass', concat=False)
-        print(f'Training VAE for table {table}')
-        train_vae(X_num, X_cat, categories, d_numerical, info, epochs=1)
+        if retrain_vae or not os.path.exists(f'ckpt/{table}/vae/decoder.pt'):
+            print(f'Training VAE for table {table}')
+            train_vae(X_num, X_cat, categories, d_numerical, info, epochs=4000)
+        else:
+            print(f'Reusing VAE for table {table}')
         # combine vae embeddings from parent tables with structural embeddings to condition diffusion
         gin_embeddings  =  pd.read_csv(f'data/gin_embeddings/rossmann-store-sales/{table}_embeddings.csv').to_numpy()
         conditional_embeddings = [gin_embeddings]
@@ -57,7 +64,7 @@ def main():
         # train conditional diffusion
         train_z, train_z_cond, _, ckpt_path, _ = get_input_train(table, is_cond=True)
         print(f'Training conditional diffusion for table {table}')
-        train_diff(train_z, train_z_cond, ckpt_path, epochs=1, is_cond=True, device='cuda:0')
+        train_diff(train_z, train_z_cond, ckpt_path, epochs=10000, is_cond=True, device='cuda:0')
     
 # GENERATION
 # sample skeletons from GraphRNN

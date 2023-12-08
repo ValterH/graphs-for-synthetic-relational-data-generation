@@ -160,16 +160,20 @@ def generate_embeddings(dataset, metadata, table_mapping, model_save_path, data_
     # write generated embeddings to a dataframe
     for table_name, table_id in table_mapping.items():
         table_mask = data.x[:, 0] == table_id
-        table_embeddings_df = pd.DataFrame(last_layer_embeddings[table_mask].numpy(), index=data.index[table_mask].numpy()).sort_index()
+        node_ids = data.index[table_mask]
+        table_embeddings_df = pd.DataFrame(last_layer_embeddings[table_mask].numpy(), index=node_ids.numpy()).sort_index()
         os.makedirs(data_save_path, exist_ok=True)
-        table_embeddings_df.to_csv(data_save_path + f"{table_name}_embeddings.csv", index=False)
-        if metadata.get_parents(table_name):
-            # TODO: this works only for rossmann we should add edge types to graphs
-            node_ids = data.index[table_mask].numpy()
-            edge_index = pd.DataFrame(data.edge_index.T, columns=['source', 'target'])
-            fks = pd.DataFrame(data.edge_index[:, :len(table_mask)][0, table_mask], index=data.index[table_mask].numpy()).sort_index()
-            fks.reset_index(inplace=True, drop = True)
-            fks.to_csv(data_save_path + f"{table_name}_fks.csv", index=False)
+        table_embeddings_df.to_csv(data_save_path + f"{table_name}_embeddings.csv")
+        for parent in metadata.get_parents(table_name):
+            for fk in metadata.get_foreign_keys(parent, table_name):
+                pyg_ids = np.where(table_mask)[0]
+                # TODO: this works only for rossmann we should add edge types to graphs
+                edge_index = pd.DataFrame(data.edge_index.T, columns=['source', 'target'])
+                fks = pd.DataFrame(data.index[edge_index[edge_index['target'].isin(pyg_ids)]['source'].values], columns=['parent'])
+                fks.index = node_ids.numpy()
+                fks['id'] = node_ids.numpy()
+                fks.sort_index(inplace=True)
+                fks.to_csv(data_save_path + f"{table_name}_{fk}_fks.csv", index=False)
 
 
         
