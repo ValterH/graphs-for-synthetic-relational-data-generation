@@ -68,13 +68,18 @@ def save_tables(tables, dataset_name, split=None, data_type='original'):
         table.to_csv(table_path, index=False)
 
 
-def load_tables(dataset_name, split, data_type='original'):
+def load_tables(dataset_name, data_type='original', split=None):
     tables = {}
     data_path = f'data/{data_type}/{dataset_name}'
     for file_name in os.listdir(data_path):
-        if split not in file_name:
+        if not file_name.endswith('.csv'):
             continue
-        table_name = file_name.split(f'_{split}')[0]
+        if split is None:
+            table_name = file_name.split('.')[0]
+        else:
+            if split not in file_name:
+                continue
+            table_name = file_name.split(f'_{split}')[0]
         table = pd.read_csv(f'{data_path}/{file_name}')
         tables[table_name] = table
     return tables

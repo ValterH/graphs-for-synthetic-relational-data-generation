@@ -17,7 +17,7 @@ def main():
     retrain_vae = False
     # read data
     metadata = load_metadata(dataset_name)
-    tables = load_tables(dataset_name, 'train')
+    tables = load_tables(dataset_name, split='train')
     # create graph
     # train GIN and compute structural embeddings using GIN
     print('Training GIN')

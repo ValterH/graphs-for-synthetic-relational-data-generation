@@ -1,4 +1,4 @@
-import json
+import os
 
 import numpy as np
 import pandas as pd
@@ -52,6 +52,7 @@ def main():
         else:
             conditional_embeddings = conditional_embeddings[0]
 
+        os.makedirs(f'ckpt/{table}/gen', exist_ok=True)
         np.save(f'ckpt/{table}/gen/cond_z.npy', conditional_embeddings)
         # sample diffusionge
         df = sample_diff(table, is_cond=True, device='cuda:0', foreign_keys=foreign_keys, ids=ids[table])

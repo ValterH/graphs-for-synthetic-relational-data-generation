@@ -32,7 +32,7 @@ def tables_to_graph(df, source, target, source_attrs_df=None, target_attrs_df=No
 
 def rossman_to_graph(k_hop=1):
     # read in the data
-    tables = load_tables("rossmann-store-sales", "train")
+    tables = load_tables("rossmann-store-sales", split="train")
     store_df = tables["store"]
     sales_df = tables["test"]
     
@@ -79,7 +79,7 @@ def rossman_to_graph(k_hop=1):
 
 def mutagenesis_to_graph(k_hop=2):
     # read in the data
-    tables = load_tables("mutagenesis", "train")
+    tables = load_tables("mutagenesis", split="train")
     molecule_df = tables["molecule"]
     atom_df = tables["atom"]
     bond_df = tables["bond"]

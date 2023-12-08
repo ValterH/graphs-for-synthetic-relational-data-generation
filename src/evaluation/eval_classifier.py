@@ -10,8 +10,9 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import log_loss, accuracy_score
 from xgboost import XGBClassifier
 from sdmetrics.utils import HyperTransformer
+from sklearn.model_selection import train_test_split, cross_val_score
 
-from src.data.utils import merge_children, load_tables, sdv_metadata
+from src.data.utils import merge_children, load_tables, load_metadata, get_root_table
 
 """
 How to call:
@@ -117,59 +118,36 @@ def drop_ids(table, table_name, metadata):
     return table
 
     
-def discriminative_detection(original_test, synthetic_test, original_train, 
-                             synthetic_train, clf=LogisticRegression(solver='lbfgs', max_iter=100), 
+def discriminative_detection(original, synthetic, clf=LogisticRegression(solver='lbfgs', max_iter=100), 
                              max_items = 100000, save_path = None, **kwargs):
 
-    transformed_original_train = original_train.copy()
-    transformed_synthetic_train = synthetic_train.copy()
-    transformed_original_test = original_test.copy()
-    transformed_synthetic_test = synthetic_test.copy()
+    transformed_original = original.copy()
+    transformed_synthetic = synthetic.copy()
 
-    column_names = transformed_original_train.columns.to_list()
-    transformed_original_test = transformed_original_test.reindex(column_names, axis=1)
-    transformed_synthetic_train = transformed_synthetic_train.reindex(column_names, axis=1)
-    transformed_synthetic_test = transformed_synthetic_test.reindex(column_names, axis=1)
+    column_names = transformed_original.columns.to_list()
+    transformed_original = transformed_original.reindex(column_names, axis=1)
+    transformed_synthetic = transformed_synthetic.reindex(column_names, axis=1)
 
-    if 'Date' in column_names:
-        transformed_original_train.drop('Date', axis=1, inplace=True)
-        transformed_synthetic_train.drop('Date', axis=1, inplace=True)
-        transformed_original_test.drop('Date', axis=1, inplace=True)
-        transformed_synthetic_test.drop('Date', axis=1, inplace=True)
+    # TODO: check if Date column is still problematic
+    # if 'Date' in column_names:
+    #     transformed_original.drop('Date', axis=1, inplace=True)
+    #     transformed_synthetic.drop('Date', axis=1, inplace=True)
 
-    # resample original test and synthetic test to same size
-    n = min(len(transformed_original_test), len(transformed_synthetic_test))
-    mask_original = np.zeros(len(transformed_original_test), dtype=bool)
-    mask_original[:n] = True
-    mask_original = np.random.permutation(mask_original)
-    mask_synthetic = np.zeros(len(transformed_synthetic_test), dtype=bool)
-    mask_synthetic[:n] = True
-    mask_synthetic = np.random.permutation(mask_synthetic)
-
-    # apply the mask
-    transformed_original_test = transformed_original_test[mask_original]
-    transformed_synthetic_test = transformed_synthetic_test[mask_synthetic]
-
-    ht = CustomHyperTransformer()
-    transformed_original_train = ht.fit_transform(transformed_original_train)
-
-    transformed_original_train = transformed_original_train.to_numpy()
-    transformed_original_test = ht.transform(transformed_original_test).to_numpy()
-    transformed_synthetic_train = ht.transform(transformed_synthetic_train).to_numpy()
-    transformed_synthetic_test = ht.transform(transformed_synthetic_test).to_numpy()
-
-    X_train = np.concatenate([transformed_original_train, transformed_synthetic_train])
-    X_test = np.concatenate([transformed_original_test, transformed_synthetic_test])
 
     # synthetic labels are 1 as this is what we are interested in (for precision and recall)
-    y_train = np.hstack([
-        np.zeros(transformed_original_train.shape[0]),
-        np.ones(transformed_synthetic_train.shape[0])
+    y = np.hstack([
+        np.zeros(transformed_original.shape[0]),
+        np.ones(transformed_synthetic.shape[0])
     ])
-    y_test = np.hstack([
-        np.zeros(transformed_original_test.shape[0]),
-        np.ones(transformed_synthetic_test.shape[0])
-    ])
+    X = pd.concat([transformed_original, transformed_synthetic], axis=0)
+
+    # TODO: we can do cross validation here
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, shuffle=True, stratify=y)
+
+
+    ht = CustomHyperTransformer()
+    X_train = ht.fit_transform(X_train)
+    X_test = ht.transform(X_test)
 
     model = Pipeline([
         ('scaler', StandardScaler()),
@@ -189,8 +167,7 @@ def discriminative_detection(original_test, synthetic_test, original_train,
     return results
 
 
-def parent_child_discriminative_detection(original_test, synthetic_test, original_train, 
-                                          synthetic_train, clf=LogisticRegression(solver='lbfgs', max_iter=100), 
+def parent_child_discriminative_detection(original, synthetic, clf=LogisticRegression(solver='lbfgs', max_iter=100), 
                                           max_items = 100000, **kwargs):
     metadata = kwargs.get('metadata', None)
     root_table = kwargs.get('root_table', None)
@@ -198,20 +175,15 @@ def parent_child_discriminative_detection(original_test, synthetic_test, origina
     print(metadata)
 
     # join parent and child tables based on the metadata
-    original_train = merge_children(original_train, metadata, root_table)
-    synthetic_train = merge_children(synthetic_train, metadata, root_table)
-    original_test = merge_children(original_test, metadata, root_table)
-    synthetic_test = merge_children(synthetic_test, metadata, root_table)
+    original = merge_children(original, metadata, root_table)
+    synthetic = merge_children(synthetic, metadata, root_table)
 
     # drop all foreign and primary keys
     for table in metadata.to_dict()['tables'].keys():
-        drop_ids(original_train, table, metadata)
-        drop_ids(synthetic_train, table, metadata)
-        drop_ids(original_test, table, metadata)
-        drop_ids(synthetic_test, table, metadata)    
+        drop_ids(original, table, metadata)
+        drop_ids(synthetic, table, metadata)
     
-    return discriminative_detection(original_test, synthetic_test, original_train, 
-                                    synthetic_train, clf=clf, max_items=max_items, **kwargs)
+    return discriminative_detection(original, synthetic, clf=clf, max_items=max_items, **kwargs)
 
 
 def get_args():
@@ -243,26 +215,20 @@ if __name__ == "__main__":
     else:
         raise ValueError('Model not supported.')
     
-    tables_train_synthetic = load_tables(args.dataset, 'train', data_type=f'synthetic/{args.method}')
-    tables_test_synthetic = load_tables(args.dataset, 'test', data_type=f'synthetic/{args.method}')
-    tables_train_original = load_tables(args.dataset, 'train')
-    tables_test_original = load_tables(args.dataset, 'test')
+    tables_synthetic = load_tables(args.dataset, data_type=f'synthetic/{args.method}')
+    tables_original = load_tables(args.dataset, split='train')
 
-    metadata = sdv_metadata.generate_metadata(args.dataset, tables_train_original)
-    root_table=sdv_metadata.get_root_table(args.dataset)
+    metadata = load_metadata(args.dataset)
+    root_table = get_root_table(args.dataset)
 
-    pc_results = parent_child_discriminative_detection(tables_test_original, tables_test_synthetic, 
-                                                       tables_train_original, tables_train_synthetic, 
+    pc_results = parent_child_discriminative_detection(tables_original, tables_synthetic, 
                                                        clf=clf, metadata=metadata, root_table=root_table)
     
     results = {'parent_child': pc_results['zero_one']}
-    for table in tables_train_original.keys():
-        original_train = drop_ids(tables_train_original[table].copy(), table, metadata)
-        original_test = drop_ids(tables_test_original[table].copy(), table, metadata)
-        synthetic_train = drop_ids(tables_train_synthetic[table].copy(), table, metadata)
-        synthetic_test = drop_ids(tables_test_synthetic[table].copy(), table, metadata)
-        results[table] = discriminative_detection(original_test, synthetic_test, original_train, 
-                                                  synthetic_train, clf=clf)['zero_one']
+    for table in tables_original.keys():
+        original = drop_ids(tables_original[table].copy(), table, metadata)
+        synthetic = drop_ids(tables_synthetic[table].copy(), table, metadata)
+        results[table] = discriminative_detection(original, synthetic, clf=clf)['zero_one']
     
     for key, value in results.items():
         print(f'{key :<12}: {np.mean(value):.3} ± {np.std(value) / np.sqrt(len(value)):.3}')

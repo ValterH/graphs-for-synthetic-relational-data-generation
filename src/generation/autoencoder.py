@@ -206,6 +206,7 @@ def train_vae(X_num, X_cat, categories, d_numerical, info,  epochs=4000, lambd=0
 
 def create_latent_embeddings(df, dataname, device = 'cuda'):
     info_path = f'tabsyn/data/{dataname}/info.json'
+    data_dir = f'tabsyn/data/{dataname}'
 
     with open(info_path, 'r') as f:
         info = json.load(f)
@@ -221,13 +222,20 @@ def create_latent_embeddings(df, dataname, device = 'cuda'):
 
     df_cat.fillna('nan', inplace=True)
 
+    # ensure the data is encoded in the sam way as the training data
+    X_num_t, X_cat_t, y_t = src.read_pure_data(data_dir, 'train')
+
     X_num = df[num_columns].to_numpy().astype(np.float32)
     X_cat = df_cat.to_numpy()
 
-
-    X_cat = {'train': X_cat, 'test': X_cat}
-    X_num = {'train': X_num, 'test': X_num}
-    y = np.zeros(X_num['train'].shape[0]),
+    # original data is in the train split
+    # the data to encode is in the test split
+    assert X_cat_t.shape == X_cat.shape
+    assert X_num_t.shape == X_num.shape
+    
+    X_categorical = {'train': X_cat_t, 'test': X_cat}
+    X_numerical = {'train': X_num_t, 'test': X_num}
+    y = {'train': y_t,     'test': np.zeros(X_num.shape[0])}
 
     T_dict = {}
     T_dict['normalization'] = "quantile"
@@ -240,18 +248,19 @@ def create_latent_embeddings(df, dataname, device = 'cuda'):
     T = src.Transformations(**T_dict)
 
     D = src.Dataset(
-        X_num,
-        X_cat,
-        {'train': y, 'test': y},
+        X_numerical,
+        X_categorical,
+        y,
         y_info={},
         task_type=src.TaskType(info['task_type']),
         n_classes=info.get('n_classes')
     )
     dataset = src.transform_dataset(D, T, None)
 
-    X_num, X_cat = dataset.X_num['train'], dataset.X_cat['train']
+    # our dataset is contained in the test split
+    X_num, X_cat = dataset.X_num['test'], dataset.X_cat['test']
 
-    categories = src.get_categories(X_cat)
+    categories = src.get_categories(dataset.X_cat['train'])
     d_numerical = X_num.shape[1]
 
     X_num = torch.tensor(X_num).float()

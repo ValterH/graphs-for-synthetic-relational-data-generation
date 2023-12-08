@@ -41,7 +41,7 @@ def train(model, data, optimizer, loss_func, epochs=100):
         optimizer.step()
         
         if epoch % 10 == 0:
-            print(f"Epoch {epoch}, Loss: {loss.item()}")
+            print(f"Epoch {f'{epoch},':<4} Loss: {loss.item() :.5f}")
 
 
 # TODO: should we train in batches with multiple disjoint graphs?
