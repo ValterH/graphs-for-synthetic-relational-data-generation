@@ -1,5 +1,6 @@
 import os
 
+import torch
 import numpy as np
 import pandas as pd
 
@@ -12,6 +13,7 @@ from src.embedding_generation.generate_embeddings import generate_embeddings
 
 def main():
     dataset_name = 'rossmann-store-sales' # TODO: HARDCODED
+    #torch.manual_seed(0) 
     # read data
     metadata = load_metadata(dataset_name)
     tables = dict()

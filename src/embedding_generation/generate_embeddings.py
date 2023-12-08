@@ -22,12 +22,6 @@ from src.data_modelling.pyg_datasets import (
     get_mutagenesis_subgraphs_dataset
 )
 
-# Set a seed for PyTorch
-SEED = 42  # Replace 42 with the desired seed value
-torch.manual_seed(SEED)
-if torch.cuda.is_available():
-    torch.cuda.manual_seed(SEED)
-
 ############################################################################################
 
 # train with a single graph represented in a Data object
@@ -208,6 +202,9 @@ def generate_embeddings(dataset, metadata, table_mapping, model_save_path, data_
 
 
 def main():
+    # Set a seed for PyTorch
+    SEED = 42  # Replace 42 with the desired seed value
+    torch.manual_seed(SEED)
     rossmann_embeddings = get_rossmann_embeddings()
     mutagenesis_embeddings = get_mutagenesis_embeddings()
     
