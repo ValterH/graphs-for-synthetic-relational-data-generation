@@ -106,8 +106,8 @@ def get_rossmann_embeddings(model_save_path = "models/gin_embeddings/rossmann-st
     sales_embeddings_df = pd.DataFrame(last_layer_embeddings[sales_mask].numpy(), index=data.index[sales_mask].numpy()).sort_index()
     
     os.makedirs(data_save_path, exist_ok=True)
-    stores_embeddings_df.to_csv(data_save_path + "stores_embeddings.csv")
-    sales_embeddings_df.to_csv(data_save_path + "sales_embeddings.csv")
+    stores_embeddings_df.to_csv(data_save_path + "store_embeddings.csv", index=False)
+    sales_embeddings_df.to_csv(data_save_path + "test_embeddings.csv", index=False)
 
 
 def get_mutagenesis_embeddings(model_save_path = "models/gin_embeddings/mutagenesis/", data_save_path="data/gin_embeddings/mutagenesis/"):
@@ -144,7 +144,39 @@ def get_mutagenesis_embeddings(model_save_path = "models/gin_embeddings/mutagene
     bond_embeddings_df.to_csv(data_save_path + "bond_embeddings.csv")
 
 
+def generate_embeddings(dataset, metadata, table_mapping, model_save_path, data_save_path, in_channels=1, hidden_channels=32, num_layers=1, out_channels=1, jk="last"):
+    # data
+    data = dataset[0]
+    
+    # model
+    # model = GINModel(num_features=1)
+    model = GIN(in_channels=in_channels, hidden_channels=hidden_channels, num_layers=num_layers, out_channels=out_channels, jk=jk)
+    # load model
+    model.load_state_dict(torch.load(model_save_path + "model.pt"))
+    
+    # get embeddings
+    last_layer_embeddings = get_gin_embeddings(model, data)
 
+    # write generated embeddings to a dataframe
+    for table_name, table_id in table_mapping.items():
+        table_mask = data.x[:, 0] == table_id
+        node_ids = data.index[table_mask]
+        table_embeddings_df = pd.DataFrame(last_layer_embeddings[table_mask].numpy(), index=node_ids.numpy()).sort_index()
+        os.makedirs(data_save_path, exist_ok=True)
+        table_embeddings_df.to_csv(data_save_path + f"{table_name}_embeddings.csv")
+        for parent in metadata.get_parents(table_name):
+            for fk in metadata.get_foreign_keys(parent, table_name):
+                pyg_ids = np.where(table_mask)[0]
+                # TODO: this works only for rossmann we should add edge types to graphs
+                edge_index = pd.DataFrame(data.edge_index.T, columns=['source', 'target'])
+                fks = pd.DataFrame(data.index[edge_index[edge_index['target'].isin(pyg_ids)]['source'].values], columns=['parent'])
+                fks.index = node_ids.numpy()
+                fks['id'] = node_ids.numpy()
+                fks.sort_index(inplace=True)
+                fks.to_csv(data_save_path + f"{table_name}_{fk}_fks.csv", index=False)
+
+
+        
 ############################################################################################
 
 

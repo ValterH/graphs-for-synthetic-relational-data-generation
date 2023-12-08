@@ -57,9 +57,12 @@ def split_table(table, seed=42):
     return table_train, table_test
 
 
-def save_tables(tables, dataset_name, split, data_type='original'):
+def save_tables(tables, dataset_name, split=None, data_type='original'):
     for table_name, table in tables.items():
-        table_path = f'data/{data_type}/{dataset_name}/{table_name}_{split}.csv'
+        if split is None:
+            table_path = f'data/{data_type}/{dataset_name}/{table_name}.csv'
+        else:
+            table_path = f'data/{data_type}/{dataset_name}/{table_name}_{split}.csv'
         if not os.path.exists(os.path.dirname(table_path)):
             os.makedirs(os.path.dirname(table_path))
         table.to_csv(table_path, index=False)
@@ -89,8 +92,8 @@ def prepare_dataset(dataset_name, seed=42):
     tables_test[root_table] = test_root
     tables_train = conditionally_sample(tables_train, metadata, root_table)
     tables_test = conditionally_sample(tables_test, metadata, root_table)
-    save_tables(tables_train, dataset_name, 'train')
-    save_tables(tables_test, dataset_name, 'test')
+    save_tables(tables_train, dataset_name, split='train')
+    save_tables(tables_test, dataset_name, split='test')
 
 
 def find_fk(parent, reference, metadata):

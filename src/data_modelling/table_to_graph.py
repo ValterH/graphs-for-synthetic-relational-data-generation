@@ -57,7 +57,7 @@ def rossman_to_graph(k_hop=1):
     store_sales_df["Sale"] = sales_df.index.map(sales_id_mapping)
     
     # root nodes (parent table)
-    root_nodes = store_sales_df["Store"].unique().tolist()
+    root_nodes = store_attrs_df["Store"]
     
     # generate the graph
     G = tables_to_graph(store_sales_df, source="Store", target="Sale", source_attrs_df=store_attrs_df, target_attrs_df=sales_attrs_df)
