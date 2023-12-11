@@ -1,6 +1,7 @@
 import os
 import json
 
+import torch
 import numpy as np
 import pandas as pd
 
@@ -12,9 +13,11 @@ from src.data.utils import load_tables, load_metadata
 from src.embedding_generation.generate_embeddings import get_rossmann_embeddings
 
 def main():
+    torch.manual_seed(0)
     # args: HARDCODED for now TODO
     dataset_name = 'rossmann-store-sales'
     retrain_vae = False
+    cond = 'mlp'
     # read data
     metadata = load_metadata(dataset_name)
     tables = load_tables(dataset_name, split='train')
@@ -64,7 +67,7 @@ def main():
         # train conditional diffusion
         train_z, train_z_cond, _, ckpt_path, _ = get_input_train(table, is_cond=True)
         print(f'Training conditional diffusion for table {table}')
-        train_diff(train_z, train_z_cond, ckpt_path, epochs=10000, is_cond=True, device='cuda:0')
+        train_diff(train_z, train_z_cond, ckpt_path, epochs=10000, is_cond=True, cond=cond, device='cuda:0')
     
 # GENERATION
 # sample skeletons from GraphRNN

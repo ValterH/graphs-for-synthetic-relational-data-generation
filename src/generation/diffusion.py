@@ -16,7 +16,7 @@ from tabsyn.diffusion_utils import sample
 warnings.filterwarnings('ignore')
 
 
-def train_diff(train_z, train_z_cond, ckpt_path, epochs=4000, is_cond=False, device='cuda:0'): 
+def train_diff(train_z, train_z_cond, ckpt_path, epochs=4000, is_cond=False, cond='linear', device='cuda:0'): 
 
     if not os.path.exists(ckpt_path):
         os.makedirs(ckpt_path)
@@ -43,7 +43,7 @@ def train_diff(train_z, train_z_cond, ckpt_path, epochs=4000, is_cond=False, dev
     )
 
 
-    denoise_fn = MLPDiffusion(in_dim, 1024, is_cond=is_cond, d_in_cond=in_dim_cond).to(device)
+    denoise_fn = MLPDiffusion(in_dim, 1024, is_cond=is_cond, d_in_cond=in_dim_cond, cond=cond).to(device)
     print(denoise_fn)
 
     num_params = sum(p.numel() for p in denoise_fn.parameters())
@@ -101,7 +101,7 @@ def train_diff(train_z, train_z_cond, ckpt_path, epochs=4000, is_cond=False, dev
     print('Time: ', end_time - start_time)
 
 
-def sample_diff(dataname, is_cond=True, device='cuda:0', num_samples=None, foreign_keys=None, ids=None):
+def sample_diff(dataname, is_cond=True, cond='linear', device='cuda:0', num_samples=None, foreign_keys=None, ids=None):
 
     if is_cond:
         cond_embedding_save_path = f'ckpt/{dataname}/gen/cond_z.npy'
@@ -124,7 +124,7 @@ def sample_diff(dataname, is_cond=True, device='cuda:0', num_samples=None, forei
 
     mean = train_z.mean(0)
 
-    denoise_fn = MLPDiffusion(in_dim, 1024, is_cond=is_cond, d_in_cond=in_dim_cond).to(device)
+    denoise_fn = MLPDiffusion(in_dim, 1024, is_cond=is_cond, d_in_cond=in_dim_cond, cond=cond).to(device)
     
     model = Model(denoise_fn = denoise_fn, hid_dim = train_z.shape[1], is_cond=is_cond).to(device)
 

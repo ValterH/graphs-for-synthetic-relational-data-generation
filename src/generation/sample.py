@@ -13,6 +13,7 @@ from src.embedding_generation.generate_embeddings import generate_embeddings
 
 def main():
     dataset_name = 'rossmann-store-sales' # TODO: HARDCODED
+    cond = 'mlp'
     #torch.manual_seed(0) 
     # read data
     metadata = load_metadata(dataset_name)
@@ -57,7 +58,7 @@ def main():
         os.makedirs(f'ckpt/{table}/gen', exist_ok=True)
         np.save(f'ckpt/{table}/gen/cond_z.npy', conditional_embeddings)
         # sample diffusionge
-        df = sample_diff(table, is_cond=True, device='cuda:0', foreign_keys=foreign_keys, ids=ids[table])
+        df = sample_diff(table, is_cond=True, cond=cond, device='cuda:0', foreign_keys=foreign_keys, ids=ids[table])
         tables[table] = df
         print(f'Successfully sampled data for table {table}')
         print(df.head())

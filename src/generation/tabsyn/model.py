@@ -94,16 +94,40 @@ class FourierEmbedding(torch.nn.Module):
         x = torch.cat([x.cos(), x.sin()], dim=1)
         return x
 
+
+class CrossAttention(nn.Module):
+    def __init__(self, embed_dim = 512, kdim = 32, vdim=32, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.multihead_attn = nn.MultiheadAttention(embed_dim, 2, kdim=kdim, vdim=vdim)
+
+    def forward(self, x, z_cond):
+        attn, _ = self.multihead_attn(x, z_cond, z_cond)
+        return attn
+
+
 class MLPDiffusion(nn.Module):
-    def __init__(self, d_in, dim_t = 512, d_in_cond = 512, is_cond=False):
+    def __init__(self, d_in, dim_t = 512, d_in_cond = 512, is_cond=False, cond = 'crossattn'):
+        print(cond)
         super().__init__()
         self.dim_t = dim_t  
         self.is_cond = is_cond
         self.d_in = d_in
+        self.cond = cond
 
         self.proj = nn.Linear(d_in, dim_t)
         if is_cond:
-            self.proj_cond = nn.Linear(d_in_cond, dim_t)
+            if self.cond == 'crossattn':
+                self.conditioning = CrossAttention(dim_t, kdim=d_in_cond, vdim=d_in_cond)
+            elif self.cond == 'linear':
+                self.conditioning = nn.Linear(d_in_cond, dim_t)
+            elif self.cond == 'mlp':
+                self.conditioning = nn.Sequential(
+                    nn.Linear(d_in_cond, dim_t * 2),
+                    nn.SiLU(),
+                    # nn.Linear(dim_t * 2, dim_t * 2),
+                    # nn.SiLU(),
+                    nn.Linear(dim_t * 2, dim_t),
+                )
             self.SiLU = nn.SiLU()
 
         self.mlp = nn.Sequential(
@@ -128,7 +152,15 @@ class MLPDiffusion(nn.Module):
         emb = emb.reshape(emb.shape[0], 2, -1).flip(1).reshape(*emb.shape) # swap sin/cos
         emb = self.time_embed(emb) 
         if self.is_cond:
-            x =  self.proj(x) + self.SiLU(self.proj_cond(z_cond))
+            if self.cond == 'crossattn':
+                x = self.proj(x) 
+                x = x + self.conditioning(x, z_cond)
+            elif self.cond == 'linear':
+                x =  self.proj(x) + self.SiLU(self.conditioning(z_cond))
+            elif self.cond == 'mlp':
+                x = self.proj(x) + self.SiLU(self.conditioning(z_cond))
+            else:
+                raise ValueError(f'Conditioning {self.cond} not supported')
         else:
             x = self.proj(x)
         x = x + emb
