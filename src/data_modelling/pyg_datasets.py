@@ -1,3 +1,5 @@
+import os
+import shutil
 import random
 
 import torch
@@ -56,23 +58,38 @@ def sample_relational_distribution(dataset_name, num_graphs, seed=42):
         features = _ROSSMANN_FEATURES_TO_KEEP_GIN
         features_length = _ROSSMANN_FEATURES_LENGTH
         dataset_class = Rossmann
-        root = "data/pyg/rossmann"
+        root = "data/pyg/rossmann_sample"
         subgraphs = get_rossmann_subgraphs(features=features, feature_mappings=_ROSSMANN_FEATURE_MAPPING_GIN)
     elif dataset_name == "mutagenesis":
         features = _MUTAGENESIS_FEATURES_TO_KEEP_GIN
         features_length = _MUTAGENESIS_FEATURES_LENGTH
         dataset_class = Mutagenesis
-        root = "data/pyg/mutagenesis"
+        root = "data/pyg/mutagenesis_sample"
         subgraphs = get_mutagenesis_subgraphs(features=features, feature_mappings=_MUTAGENESIS_FEATURE_MAPPING_GIN)
     else:
         raise ValueError(f"Dataset {dataset_name} not supported")
+    
+    # set seed and sample with replacement
     random.seed(seed)
-    sampled_subgraphs = random.sample(subgraphs, num_graphs)
+    sampled_subgraphs = random.choices(subgraphs, k = num_graphs)
+    
+    # combine all of the small graphs into one big graph and relabel the nodes
     G = sampled_subgraphs[0]
     for i in range(1, len(sampled_subgraphs)):
+        # disjoint union relabels the nodes
         G = nx.disjoint_union(G, sampled_subgraphs[i])
+    
+    #
     data_list = [from_networkx(G, group_node_attrs=features)]
-    return from_data_list(data_list, dataset_class=dataset_class, root=root, features_length=features_length, target=False)
+    data_list[0].index = torch.tensor(range(data_list[0].x.shape[0]))
+    data_list[0].x = data_list[0].x[:, 1:(features_length + 1)].type(torch.float)
+    
+    if os.path.exists(root):
+        shutil.rmtree(root)
+    
+    dataset = dataset_class(root=root, data_list=data_list)
+    dataset.process()
+    return dataset
 
 
 def from_data_list(data_list, dataset_class=Rossmann, root="data/pyg/rossmann", features_length=_ROSSMANN_FEATURES_LENGTH, target=True):
@@ -187,6 +204,11 @@ def get_mutagenesis_subgraphs_dataset(root="data/pyg_subgraphs/mutagenesis", fea
 ############################################################################################
 
 def main():
+    
+    rossmann_sample = sample_relational_distribution("rossmann-store-sales", 10, seed=420)
+    
+    mutagenesis_sample = sample_relational_distribution("mutagenesis", 10, seed=420)
+    
     pass
 
 if __name__ == "__main__":
