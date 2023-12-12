@@ -73,39 +73,23 @@ def sample_relational_distribution(dataset_name, num_graphs, seed=42):
     random.seed(seed)
     sampled_subgraphs = random.choices(subgraphs, k = num_graphs)
     
-    # combine all of the small graphs into one big graph and relabel the nodes
-    G = sampled_subgraphs[0]
-    for i in range(1, len(sampled_subgraphs)):
-        # disjoint union relabels the nodes
-        G = nx.disjoint_union(G, sampled_subgraphs[i])
-    
-    #
-    data_list = [from_networkx(G, group_node_attrs=features)]
-    data_list[0].index = torch.tensor(range(data_list[0].x.shape[0]))
-    data_list[0].x = data_list[0].x[:, 1:(features_length + 1)].type(torch.float)
+    # avoid relabeling by using a list of graphs
+    sampled_subgraphs = [from_networkx(G, group_node_attrs=features) for G in sampled_subgraphs]
+    previous_graph_nodes = 0
+    for i in range(len(sampled_subgraphs)):
+        sampled_subgraphs[i].edge_index += previous_graph_nodes
+        previous_graph_nodes += len(sampled_subgraphs[i].x)
+    # concat all of the tensors
+    all_graphs_data = sampled_subgraphs[0]
+    for data in sampled_subgraphs[1:]:
+        all_graphs_data.edge_index = torch.cat((all_graphs_data.edge_index, data.edge_index), dim=1)
+        all_graphs_data.x = torch.cat((all_graphs_data.x, data.x), dim=0)
+    all_graphs_data.index = torch.tensor(range(all_graphs_data.x.shape[0]))
+    data_list = [all_graphs_data]    
     
     if os.path.exists(root):
         shutil.rmtree(root)
     
-    dataset = dataset_class(root=root, data_list=data_list)
-    dataset.process()
-    return dataset
-
-
-def from_data_list(data_list, dataset_class=Rossmann, root="data/pyg/rossmann", features_length=_ROSSMANN_FEATURES_LENGTH, target=True):
-    # we assume that the target is the last feature
-    # from_networkx doesn't support specifying the target so we have to do it manually
-    if target:
-        for data in data_list:
-            # we assume that the first column is the index (needed for future mappings)
-            data.index = data.x[:, 0]
-            # we assume that the target is located at the last few columns
-            data.y = data.x[:, (features_length + 1):].view(-1, data.x.shape[1] - features_length - 1).type(torch.float)
-            # we assume the features are located in the middle columns
-            data.x = data.x[:, 1:(features_length + 1)].type(torch.float)
-    
-    # TODO: if we already have saved files this will not update them
-    # process() should do it afaik but its not working ...
     dataset = dataset_class(root=root, data_list=data_list)
     dataset.process()
     return dataset
