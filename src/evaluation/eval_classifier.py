@@ -128,11 +128,13 @@ def discriminative_detection(original, synthetic, clf=LogisticRegression(solver=
     transformed_original = transformed_original.reindex(column_names, axis=1)
     transformed_synthetic = transformed_synthetic.reindex(column_names, axis=1)
 
-    # TODO: check if Date column is still problematic
-    # if 'Date' in column_names:
-    #     transformed_original.drop('Date', axis=1, inplace=True)
-    #     transformed_synthetic.drop('Date', axis=1, inplace=True)
-
+    
+    if 'Date' in column_names:
+        transformed_original['Date'] = pd.to_numeric(pd.to_datetime(transformed_original['Date']))
+        transformed_synthetic['Date'] = pd.to_numeric(pd.to_datetime(transformed_synthetic['Date']))
+        # TODO: check if Date column is still problematic
+        # transformed_original.drop('Date', axis=1, inplace=True)
+        # transformed_synthetic.drop('Date', axis=1, inplace=True)
 
     # synthetic labels are 1 as this is what we are interested in (for precision and recall)
     y = np.hstack([
@@ -157,6 +159,11 @@ def discriminative_detection(original, synthetic, clf=LogisticRegression(solver=
     model.fit(X_train, y_train)
     probs = model.predict_proba(X_test)
     y_pred = probs.argmax(axis=1)
+
+    feature_importances = list(zip(X_train.columns, model['clf'].feature_importances_))
+    feature_importances.sort(key=lambda x: x[1], reverse=True)
+    for feature, importance in feature_importances:
+        print(f'{feature :<12}: {importance:.3}')
 
     results = {
         'zero_one': (y_test == y_pred).astype(int).tolist(),
