@@ -6,17 +6,17 @@ import torch
 from utils_train import preprocess
 from src.generation.vae.model import Decoder_model
 
-def get_input_train(dataname, is_cond):
+def get_input_train(dataname, is_cond, run):
 
     dataset_dir = f'tabsyn/data/{dataname}'
 
     with open(f'{dataset_dir}/info.json', 'r') as f:
         info = json.load(f)
 
-    ckpt_dir = f'ckpt/{dataname}/'
+    ckpt_dir = f'ckpt/{dataname}/{run}'
     embedding_save_path = f'ckpt/{dataname}/vae/train_z.npy'
     if is_cond:
-        cond_embedding_save_path = f'ckpt/{dataname}/cond_train_z.npy'
+        cond_embedding_save_path = f'ckpt/{dataname}/{run}/cond_train_z.npy'
         train_z_cond = torch.tensor(np.load(cond_embedding_save_path)).float()
     else:
         train_z_cond = None
@@ -31,10 +31,10 @@ def get_input_train(dataname, is_cond):
     return train_z, train_z_cond, dataset_dir, ckpt_dir, info
 
 
-def get_input_generate(dataname):
+def get_input_generate(dataname, run):
 
     dataset_dir = f'tabsyn/data/{dataname}'
-    ckpt_dir = f'ckpt/{dataname}'
+    ckpt_dir = f'ckpt/{dataname}/{run}'
 
     with open(f'{dataset_dir}/info.json', 'r') as f:
         info = json.load(f)

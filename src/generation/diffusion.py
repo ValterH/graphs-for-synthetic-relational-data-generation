@@ -101,10 +101,10 @@ def train_diff(train_z, train_z_cond, ckpt_path, epochs=4000, is_cond=False, con
     print('Time: ', end_time - start_time)
 
 
-def sample_diff(dataname, is_cond=True, cond='linear', device='cuda:0', num_samples=None, foreign_keys=None, ids=None):
+def sample_diff(dataname, run, is_cond=True, cond='linear', device='cuda:0', num_samples=None, foreign_keys=None, ids=None):
 
     if is_cond:
-        cond_embedding_save_path = f'ckpt/{dataname}/gen/cond_z.npy'
+        cond_embedding_save_path = f'ckpt/{dataname}/{run}/gen/cond_z.npy'
         train_z_cond = torch.tensor(np.load(cond_embedding_save_path)).float()
         # TODO: this used to be train_z = train_z[:, 1:, :] <- the authors do not use the first token
         B, in_dim_cond = train_z_cond.size()
@@ -119,7 +119,7 @@ def sample_diff(dataname, is_cond=True, cond='linear', device='cuda:0', num_samp
             ids = np.arange(num_samples)
 
 
-    train_z, _, ckpt_path, info, num_inverse, cat_inverse = get_input_generate(dataname)
+    train_z, _, ckpt_path, info, num_inverse, cat_inverse = get_input_generate(dataname, run=run)
     in_dim = train_z.shape[1] 
 
     mean = train_z.mean(0)
