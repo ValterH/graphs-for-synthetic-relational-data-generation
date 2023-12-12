@@ -107,7 +107,6 @@ class CrossAttention(nn.Module):
 
 class MLPDiffusion(nn.Module):
     def __init__(self, d_in, dim_t = 512, d_in_cond = 512, is_cond=False, cond = 'crossattn'):
-        print(cond)
         super().__init__()
         self.dim_t = dim_t  
         self.is_cond = is_cond
