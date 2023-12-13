@@ -2,20 +2,18 @@ import pathlib
 import pandas as pd
 import networkx as nx
 
-from src.data.utils import load_tables
+from src.data.utils import load_tables, load_metadata, get_root_table
 
 ###########################################################################################
 SEED = 42
 ###########################################################################################
 
-
-# get a dataframe with source and target columns
-# the columns contain the id's of the nodes in the graph
-def tables_to_graph(df, source, target, source_attrs_df=None, target_attrs_df=None, directed=True):
-    
+def tables_to_graph(edge_index, source, target, source_attrs_df=None, target_attrs_df=None, directed=True):
+    # TODO: write docstring (source parent primary key, child primary key )
+        
     # generate graph from edge connections in the df
     create_using=nx.DiGraph() if directed else nx.Graph()
-    G = nx.from_pandas_edgelist(df, source=source, target=target, create_using=create_using)
+    G = nx.from_pandas_edgelist(edge_index, source=source, target=target, create_using=create_using)
     
     # add the atributes for source nodes
     if (source_attrs_df is not None) and (not source_attrs_df.empty):
@@ -30,122 +28,197 @@ def tables_to_graph(df, source, target, source_attrs_df=None, target_attrs_df=No
     return G
 
 
-def rossman_to_graph(k_hop=1):
-    # read in the data
-    tables = load_tables("rossmann-store-sales", split="train")
-    store_df = tables["store"]
-    sales_df = tables["test"]
+def database_to_graph(database_name, split="train", directed=True):
+    """Convert a supported database to a graph.
+
+    Args:
+        database_name (str): name of the database. Currently supported: "rossmann-store-sales", "mutagenesis".
+        split (str, optional): The data split to load. Defaults to "train".
+    """
     
-    # each store and sale has a unique id
-    store_id_mapping = {store_id: i for i, store_id in enumerate(store_df["Store"].unique())}
-    sales_id_mapping = {sales_id: i + len(store_id_mapping) for i, sales_id in enumerate(sales_df.index)}
+    # load the data and metadata
+    tables = load_tables(database_name, split=split) # dict of dataframes
+    metadata = load_metadata(database_name) # sdv metadata object (built from a metadata.json file)
     
-    # features for stores and sales
-    # TODO: create dataframes with encoded features that are useful
-    store_attrs_df = store_df
-    store_attrs_df["Store"] = store_df["Store"].map(store_id_mapping)
-    store_attrs_df["type"] = "store"
+    # initialize empty graph
+    G = nx.DiGraph() if directed else nx.Graph()
     
-    sales_attrs_df = sales_df
-    sales_attrs_df["Sale"] = sales_df.index.map(sales_id_mapping)
-    sales_attrs_df = sales_attrs_df.drop(columns=["Store"])
-    sales_attrs_df["type"] = "sale"
+    # starting id for primary key mappings
+    starting_id = 0
+    key_mappings = {}
     
-    # edges between stores and sales
-    store_sales_df = pd.DataFrame()
-    store_sales_df["Store"] = sales_df["Store"].map(store_id_mapping)
-    store_sales_df["Sale"] = sales_df.index.map(sales_id_mapping)
+    # loop over all of the tables
+    for parent_table_name in metadata.get_tables():
+        
+        parent_pk = metadata.get_primary_key(parent_table_name)
+        parent_table = tables[parent_table_name].copy()
+        parent_table["type"] = parent_table_name
+        if parent_table_name in key_mappings:
+            parent_id_mapping = key_mappings[parent_table_name]
+        else:
+            parent_id_mapping = {parent_id: i + starting_id for i, parent_id in enumerate(parent_table[parent_pk])}
+            key_mappings[parent_table_name] = parent_id_mapping
+            starting_id += len(parent_id_mapping)    
+        # remap the ids
+        parent_table[parent_pk] = parent_table[parent_pk].map(parent_id_mapping)
+        
+        # loop over all of the children of the current table
+        for child_table_name in metadata.get_children(parent_table_name):
+            
+            child_pk = metadata.get_primary_key(child_table_name)
+            child_table = tables[child_table_name].copy()        
+            child_table["type"] = child_table_name
+            # create a mapping for parent and child ids (the primary keys are not necessarily integers so we remap them to integers)
+            if child_table_name in key_mappings:
+                child_id_mapping = key_mappings[child_table_name]
+            else:
+                child_id_mapping = {child_id: i + starting_id for i, child_id in enumerate(child_table[child_pk])}
+                key_mappings[child_table_name] = child_id_mapping
+                starting_id += len(child_id_mapping)
+            # remap the ids
+            child_table[child_pk] = child_table[child_pk].map(child_id_mapping)
+            
+            
+            
+            # loop over all of the foreign keys of the child table
+            for foreign_key in metadata.get_foreign_keys(parent_table_name, child_table_name):
+                # remap the foreign key of the child table
+                child_table[foreign_key] = child_table[foreign_key].map(parent_id_mapping)
+                
+                # create the edge index used to build the graph
+                edge_index = pd.DataFrame()
+                edge_index[parent_pk] = child_table[foreign_key]
+                edge_index[child_pk] = child_table[child_pk]
+                
+                # TODO: add features optionally and directed/undirected optionally
+                H = tables_to_graph(edge_index, source=parent_pk, target=child_pk, source_attrs_df=parent_table, target_attrs_df=child_table)
+                G = nx.compose(G, H)
     
-    # root nodes (parent table)
-    root_nodes = store_attrs_df["Store"]
-    
-    # generate the graph
-    G = tables_to_graph(store_sales_df, source="Store", target="Sale", source_attrs_df=store_attrs_df, target_attrs_df=sales_attrs_df)
-    
-    
-    ###########################################################
-    # additional features, feature engineering
-    
-    # add node index as a feature (need because of pyg stuff)
-    id_dict = {id: id for id in G.nodes()}
-    nx.set_node_attributes(G, id_dict, "index")
-    
-    # add k-hop degrees as features
-    k_hop_degrees = all_nodes_k_hop_degrees(G, k=k_hop)
-    nx.set_node_attributes(G, k_hop_degrees, "k-hop_degrees")
-    
-    return G, root_nodes
+    root_node_ids = list(key_mappings[get_root_table(database_name)].values())
+    return G, root_node_ids
 
 
-def mutagenesis_to_graph(k_hop=2):
-    # read in the data
-    tables = load_tables("mutagenesis", split="train")
-    molecule_df = tables["molecule"]
-    atom_df = tables["atom"]
-    bond_df = tables["bond"]
-    
-    # each molecule, atom and bond has a unique id
-    molecule_id_mapping = {molecule_id: i for i, molecule_id in enumerate(molecule_df["molecule_id"].unique())}
-    atom_id_mapping = {atom_id: i + len(molecule_id_mapping) for i, atom_id in enumerate(atom_df["atom_id"].unique())}
-    bond_id_mapping = {bond_id: i + len(molecule_id_mapping) + len(atom_id_mapping) for i, bond_id in enumerate(bond_df.index)}
-    
-    # features for stores and sales
-    # TODO: create dataframes with encoded features that are useful
-    molecule_attrs_df = molecule_df
-    molecule_attrs_df["Molecule"] = molecule_df["molecule_id"].map(molecule_id_mapping)
-    molecule_attrs_df = molecule_attrs_df.drop(columns=["molecule_id"])
-    molecule_attrs_df["type"] = "molecule"
-    
-    atom_attrs_df = atom_df
-    atom_attrs_df["Atom"] = atom_df["atom_id"].map(atom_id_mapping)
-    atom_attrs_df = atom_attrs_df.drop(columns=["molecule_id", "atom_id"])
-    atom_attrs_df["type"] = "atom"
-    
-    bond_attrs_df = bond_df
-    bond_attrs_df["Bond"] = bond_df.index.map(bond_id_mapping)
-    bond_attrs_df = bond_attrs_df.drop(columns=["atom1_id", "atom2_id"])
-    bond_attrs_df["type"] = "bond"
-    
-    
-    # first bipartite component
-    molecule_atom_df = pd.DataFrame()
-    molecule_atom_df["Molecule"] = atom_df["molecule_id"].map(molecule_id_mapping)
-    molecule_atom_df["Atom"] = atom_df["atom_id"].map(atom_id_mapping)
-    G_molecule_to_atom = tables_to_graph(molecule_atom_df, source="Molecule", target="Atom", source_attrs_df=molecule_attrs_df, target_attrs_df=atom_attrs_df)
+def database_to_subgraphs(database_name, split="train", directed=True):
+    G, G_root_node_ids = database_to_graph(database_name, split=split, directed=directed)
+    return graph_to_subgraphs(G, G_root_node_ids), G_root_node_ids
 
-    # second bipartite component
-    atom_bond_df = pd.DataFrame()
-    atom_bond_df["Atom1"] = bond_df["atom1_id"].map(atom_id_mapping)
-    atom_bond_df["Atom2"] = bond_df["atom2_id"].map(atom_id_mapping)
-    atom_bond_df["Bond"] = bond_df.index.map(bond_id_mapping)
-    # connect atom1 and atom2 to bond
-    atom_attrs_df = atom_attrs_df.rename(columns={"Atom": "Atom1"})
-    G_atom1_to_bond = tables_to_graph(atom_bond_df, source="Atom1", target="Bond", source_attrs_df=atom_attrs_df, target_attrs_df=bond_attrs_df)
-    atom_attrs_df = atom_attrs_df.rename(columns={"Atom1": "Atom2"})
-    G_atom2_to_bond = tables_to_graph(atom_bond_df, source="Atom2", target="Bond", source_attrs_df=atom_attrs_df, target_attrs_df=bond_attrs_df)
-    atom_attrs_df = atom_attrs_df.rename(columns={"Atom2": "Atom"})
-    # combine the two graphs
-    G_atom_to_bond = nx.compose(G_atom1_to_bond, G_atom2_to_bond)
 
-    # root nodes (parent table)
-    root_nodes = molecule_atom_df["Molecule"].unique().tolist()
+# def rossman_to_graph(k_hop=1):
+#     # read in the data
+#     tables = load_tables("rossmann-store-sales", split="train")
+#     store_df = tables["store"]
+#     sales_df = tables["test"]
     
-    # combine the two bipartite components
-    G = nx.compose(G_molecule_to_atom, G_atom_to_bond)
+#     # each store and sale has a unique id
+#     store_id_mapping = {store_id: i for i, store_id in enumerate(store_df["Store"].unique())}
+#     sales_id_mapping = {sales_id: i + len(store_id_mapping) for i, sales_id in enumerate(sales_df.index)}
+    
+#     # features for stores and sales
+#     # TODO: create dataframes with encoded features that are useful
+#     store_attrs_df = store_df
+#     store_attrs_df["Store"] = store_df["Store"].map(store_id_mapping)
+#     store_attrs_df["type"] = "store"
+    
+#     sales_attrs_df = sales_df
+#     sales_attrs_df["Sale"] = sales_df.index.map(sales_id_mapping)
+#     sales_attrs_df = sales_attrs_df.drop(columns=["Store"])
+#     sales_attrs_df["type"] = "sale"
+    
+#     # edges between stores and sales
+#     store_sales_df = pd.DataFrame()
+#     store_sales_df["Store"] = sales_df["Store"].map(store_id_mapping)
+#     store_sales_df["Sale"] = sales_df.index.map(sales_id_mapping)
+    
+#     # root nodes (parent table)
+#     root_nodes = store_attrs_df["Store"]
+    
+#     # generate the graph
+#     G = tables_to_graph(store_sales_df, source="Store", target="Sale", source_attrs_df=store_attrs_df, target_attrs_df=sales_attrs_df)
     
     
-    ###########################################################
-    # additional features, feature engineering
+#     ###########################################################
+#     # additional features, feature engineering
     
-    # add node index as a feature (need because of pyg stuff)
-    id_dict = {id: id for id in G.nodes()}
-    nx.set_node_attributes(G, id_dict, "index")
+#     # add node index as a feature (need because of pyg stuff)
+#     id_dict = {id: id for id in G.nodes()}
+#     nx.set_node_attributes(G, id_dict, "index")
     
-    # add k-hop degrees as features
-    k_hop_degrees = all_nodes_k_hop_degrees(G, k=k_hop)
-    nx.set_node_attributes(G, k_hop_degrees, "k-hop_degrees")
+#     # add k-hop degrees as features
+#     k_hop_degrees = all_nodes_k_hop_degrees(G, k=k_hop)
+#     nx.set_node_attributes(G, k_hop_degrees, "k-hop_degrees")
+    
+#     return G, root_nodes
 
-    return G, root_nodes
+
+# def mutagenesis_to_graph(k_hop=2):
+#     # read in the data
+#     tables = load_tables("mutagenesis", split="train")
+#     molecule_df = tables["molecule"]
+#     atom_df = tables["atom"]
+#     bond_df = tables["bond"]
+    
+#     # each molecule, atom and bond has a unique id
+#     molecule_id_mapping = {molecule_id: i for i, molecule_id in enumerate(molecule_df["molecule_id"].unique())}
+#     atom_id_mapping = {atom_id: i + len(molecule_id_mapping) for i, atom_id in enumerate(atom_df["atom_id"].unique())}
+#     bond_id_mapping = {bond_id: i + len(molecule_id_mapping) + len(atom_id_mapping) for i, bond_id in enumerate(bond_df.index)}
+    
+#     # features for stores and sales
+#     # TODO: create dataframes with encoded features that are useful
+#     molecule_attrs_df = molecule_df
+#     molecule_attrs_df["Molecule"] = molecule_df["molecule_id"].map(molecule_id_mapping)
+#     molecule_attrs_df = molecule_attrs_df.drop(columns=["molecule_id"])
+#     molecule_attrs_df["type"] = "molecule"
+    
+#     atom_attrs_df = atom_df
+#     atom_attrs_df["Atom"] = atom_df["atom_id"].map(atom_id_mapping)
+#     atom_attrs_df = atom_attrs_df.drop(columns=["molecule_id", "atom_id"])
+#     atom_attrs_df["type"] = "atom"
+    
+#     bond_attrs_df = bond_df
+#     bond_attrs_df["Bond"] = bond_df.index.map(bond_id_mapping)
+#     bond_attrs_df = bond_attrs_df.drop(columns=["atom1_id", "atom2_id"])
+#     bond_attrs_df["type"] = "bond"
+    
+    
+#     # first bipartite component
+#     molecule_atom_df = pd.DataFrame()
+#     molecule_atom_df["Molecule"] = atom_df["molecule_id"].map(molecule_id_mapping)
+#     molecule_atom_df["Atom"] = atom_df["atom_id"].map(atom_id_mapping)
+#     G_molecule_to_atom = tables_to_graph(molecule_atom_df, source="Molecule", target="Atom", source_attrs_df=molecule_attrs_df, target_attrs_df=atom_attrs_df)
+
+#     # second bipartite component
+#     atom_bond_df = pd.DataFrame()
+#     atom_bond_df["Atom1"] = bond_df["atom1_id"].map(atom_id_mapping)
+#     atom_bond_df["Atom2"] = bond_df["atom2_id"].map(atom_id_mapping)
+#     atom_bond_df["Bond"] = bond_df.index.map(bond_id_mapping)
+#     # connect atom1 and atom2 to bond
+#     atom_attrs_df = atom_attrs_df.rename(columns={"Atom": "Atom1"})
+#     G_atom1_to_bond = tables_to_graph(atom_bond_df, source="Atom1", target="Bond", source_attrs_df=atom_attrs_df, target_attrs_df=bond_attrs_df)
+#     atom_attrs_df = atom_attrs_df.rename(columns={"Atom1": "Atom2"})
+#     G_atom2_to_bond = tables_to_graph(atom_bond_df, source="Atom2", target="Bond", source_attrs_df=atom_attrs_df, target_attrs_df=bond_attrs_df)
+#     atom_attrs_df = atom_attrs_df.rename(columns={"Atom2": "Atom"})
+#     # combine the two graphs
+#     G_atom_to_bond = nx.compose(G_atom1_to_bond, G_atom2_to_bond)
+
+#     # root nodes (parent table)
+#     root_nodes = molecule_atom_df["Molecule"].unique().tolist()
+    
+#     # combine the two bipartite components
+#     G = nx.compose(G_molecule_to_atom, G_atom_to_bond)
+    
+    
+#     ###########################################################
+#     # additional features, feature engineering
+    
+#     # add node index as a feature (need because of pyg stuff)
+#     id_dict = {id: id for id in G.nodes()}
+#     nx.set_node_attributes(G, id_dict, "index")
+    
+#     # add k-hop degrees as features
+#     k_hop_degrees = all_nodes_k_hop_degrees(G, k=k_hop)
+#     nx.set_node_attributes(G, k_hop_degrees, "k-hop_degrees")
+
+#     return G, root_nodes
 
 
 def all_nodes_k_hop_degrees(graph, k, undirected=True):
@@ -201,54 +274,58 @@ def filter_graph_features_with_mapping(graph, features_to_keep, feature_mapping)
 
 ###########################################################################################
 
-def get_rossmann_graph(root_nodes=True, features=None, feature_mappings=None):
-    G_rossmann, rossmann_root_nodes = rossman_to_graph()
+# def get_rossmann_graph(root_nodes=True, features=None, feature_mappings=None):
+#     G_rossmann, rossmann_root_nodes = rossman_to_graph()
     
-    # filter features
-    if features is not None:
-        G_rossmann = filter_graph_features_with_mapping(G_rossmann, features, feature_mappings)
+#     # filter features
+#     if features is not None:
+#         G_rossmann = filter_graph_features_with_mapping(G_rossmann, features, feature_mappings)
     
-    # also return the root nodes
-    if root_nodes:
-        return G_rossmann, rossmann_root_nodes
+#     # also return the root nodes
+#     if root_nodes:
+#         return G_rossmann, rossmann_root_nodes
     
-    return G_rossmann
+#     return G_rossmann
 
 
-def get_rossmann_subgraphs(features=None, feature_mappings=None):
-    if features is None:
-        G_rossmann, rossmann_root_nodes = get_rossmann_graph(features=features, feature_mappings=feature_mappings)
-    else:
-        G_rossmann, rossmann_root_nodes = get_rossmann_graph(features=features, feature_mappings=feature_mappings)
+# def get_rossmann_subgraphs(features=None, feature_mappings=None):
+#     if features is None:
+#         G_rossmann, rossmann_root_nodes = get_rossmann_graph(features=features, feature_mappings=feature_mappings)
+#     else:
+#         G_rossmann, rossmann_root_nodes = get_rossmann_graph(features=features, feature_mappings=feature_mappings)
     
-    return graph_to_subgraphs(G_rossmann, rossmann_root_nodes)
+#     return graph_to_subgraphs(G_rossmann, rossmann_root_nodes)
 
 
-def get_mutagenesis_graph(root_nodes=True, features=None, feature_mappings=None):
-    G_mutagenesis, mutagenesis_root_nodes = mutagenesis_to_graph()
+# def get_mutagenesis_graph(root_nodes=True, features=None, feature_mappings=None):
+#     G_mutagenesis, mutagenesis_root_nodes = mutagenesis_to_graph()
     
-    # filter features
-    if features is not None:
-        G_mutagenesis = filter_graph_features_with_mapping(G_mutagenesis, features, feature_mappings)
+#     # filter features
+#     if features is not None:
+#         G_mutagenesis = filter_graph_features_with_mapping(G_mutagenesis, features, feature_mappings)
     
-    # also return the root nodes
-    if root_nodes:
-        return G_mutagenesis, mutagenesis_root_nodes
+#     # also return the root nodes
+#     if root_nodes:
+#         return G_mutagenesis, mutagenesis_root_nodes
     
-    return G_mutagenesis
+#     return G_mutagenesis
 
 
-def get_mutagenesis_subgraphs(features=None, feature_mappings=None):
-    if features is None:
-        G_mutagenesis, mutagenesis_root_nodes = get_mutagenesis_graph(features=features, feature_mappings=feature_mappings)
-    else:
-        G_mutagenesis, mutagenesis_root_nodes = get_mutagenesis_graph(features=features, feature_mappings=feature_mappings)
+# def get_mutagenesis_subgraphs(features=None, feature_mappings=None):
+#     if features is None:
+#         G_mutagenesis, mutagenesis_root_nodes = get_mutagenesis_graph(features=features, feature_mappings=feature_mappings)
+#     else:
+#         G_mutagenesis, mutagenesis_root_nodes = get_mutagenesis_graph(features=features, feature_mappings=feature_mappings)
     
-    return graph_to_subgraphs(G_mutagenesis, mutagenesis_root_nodes)
+#     return graph_to_subgraphs(G_mutagenesis, mutagenesis_root_nodes)
 
 ###########################################################################################
 
 def main():
+    G_rossmann, rossmann_root_node_ids = database_to_graph("rossmann-store-sales")
+    
+    G_mutagenesis, mutagenesis_root_node_ids = database_to_graph("mutagenesis")
+    
     pass
 
 if __name__ == "__main__":  
