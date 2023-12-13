@@ -85,6 +85,7 @@ def sample_relational_distribution(dataset_name, num_graphs, seed=42):
         all_graphs_data.edge_index = torch.cat((all_graphs_data.edge_index, data.edge_index), dim=1)
         all_graphs_data.x = torch.cat((all_graphs_data.x, data.x), dim=0)
     all_graphs_data.index = torch.tensor(range(all_graphs_data.x.shape[0]))
+    all_graphs_data.x = all_graphs_data.x[:, 1:(features_length + 1)].type(torch.float)
     data_list = [all_graphs_data]    
     
     if os.path.exists(root):

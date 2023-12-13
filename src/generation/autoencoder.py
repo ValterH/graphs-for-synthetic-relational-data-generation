@@ -230,8 +230,8 @@ def create_latent_embeddings(df, dataname, device = 'cuda'):
 
     # original data is in the train split
     # the data to encode is in the test split
-    assert X_cat_t.shape == X_cat.shape
-    assert X_num_t.shape == X_num.shape
+    assert X_cat_t.shape[1] == X_cat.shape[1]
+    assert X_num_t.shape[1] == X_num.shape[1]
     
     X_categorical = {'train': X_cat_t, 'test': X_cat}
     X_numerical = {'train': X_num_t, 'test': X_num}

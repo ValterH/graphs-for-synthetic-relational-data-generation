@@ -128,13 +128,17 @@ def discriminative_detection(original, synthetic, clf=LogisticRegression(solver=
     transformed_original = transformed_original.reindex(column_names, axis=1)
     transformed_synthetic = transformed_synthetic.reindex(column_names, axis=1)
 
+    n = min(max_items, transformed_original.shape[0], transformed_synthetic.shape[0])
+    transformed_original = transformed_original.sample(n=n, random_state=42, replace=False)
+    transformed_synthetic = transformed_synthetic.sample(n=n, random_state=42, replace=False)
+
     
     if 'Date' in column_names:
         transformed_original['Date'] = pd.to_numeric(pd.to_datetime(transformed_original['Date']))
         transformed_synthetic['Date'] = pd.to_numeric(pd.to_datetime(transformed_synthetic['Date']))
         # TODO: check if Date column is still problematic
-        # transformed_original.drop('Date', axis=1, inplace=True)
-        # transformed_synthetic.drop('Date', axis=1, inplace=True)
+        transformed_original.drop('Date', axis=1, inplace=True)
+        transformed_synthetic.drop('Date', axis=1, inplace=True)
 
     # synthetic labels are 1 as this is what we are interested in (for precision and recall)
     y = np.hstack([
@@ -145,7 +149,6 @@ def discriminative_detection(original, synthetic, clf=LogisticRegression(solver=
 
     # TODO: we can do cross validation here
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, shuffle=True, stratify=y)
-
 
     ht = CustomHyperTransformer()
     X_train = ht.fit_transform(X_train)
@@ -178,8 +181,6 @@ def parent_child_discriminative_detection(original, synthetic, clf=LogisticRegre
                                           max_items = 100000, **kwargs):
     metadata = kwargs.get('metadata', None)
     root_table = kwargs.get('root_table', None)
-    print(root_table)
-    print(metadata)
 
     # join parent and child tables based on the metadata
     original = merge_children(original, metadata, root_table)
@@ -228,6 +229,7 @@ if __name__ == "__main__":
     metadata = load_metadata(args.dataset)
     root_table = get_root_table(args.dataset)
 
+    print('multi-table')
     pc_results = parent_child_discriminative_detection(tables_original, tables_synthetic, 
                                                        clf=clf, metadata=metadata, root_table=root_table)
     
@@ -235,6 +237,7 @@ if __name__ == "__main__":
     for table in tables_original.keys():
         original = drop_ids(tables_original[table].copy(), table, metadata)
         synthetic = drop_ids(tables_synthetic[table].copy(), table, metadata)
+        print(table)
         results[table] = discriminative_detection(original, synthetic, clf=clf)['zero_one']
     
     for key, value in results.items():

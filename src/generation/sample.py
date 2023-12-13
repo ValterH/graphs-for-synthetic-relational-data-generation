@@ -7,12 +7,13 @@ import pandas as pd
 from diffusion import sample_diff
 from autoencoder import create_latent_embeddings
 from src.data.utils import load_metadata, save_tables
-from src.data_modelling.pyg_datasets import sample_relational_distribution, get_rossmann_dataset
+from src.data_modelling.pyg_datasets import sample_relational_distribution
 from src.embedding_generation.generate_embeddings import generate_embeddings
 
 
 def main():
-    dataset_name = 'rossmann-store-sales' # TODO: HARDCODED
+    dataset_name = 'mutagenesis' #'rossmann-store-sales' # TODO: HARDCODED
+    num_samples = 1115
     cond = 'mlp'
     run = 'GIN_DEG_COND_MLP'
     #torch.manual_seed(0) 
@@ -20,15 +21,15 @@ def main():
     metadata = load_metadata(dataset_name)
     tables = dict()
     # create graph
-    # TODO: actually sample a new graph not just load the original one
-    dataset = get_rossmann_dataset()
-    generate_embeddings(dataset, metadata, {'store': 0, 'test':1}, model_save_path = f"models/gin_embeddings/rossmann-store-sales/{run}/", data_save_path=f"data/gin_embeddings/rossmann-store-sales/{run}/generated/")
+    dataset = sample_relational_distribution(dataset_name, num_samples)
+    generate_embeddings(dataset, metadata, {'store': 0, 'test':1}, model_save_path = f"models/gin_embeddings/{dataset_name}/{run}/", data_save_path=f"data/gin_embeddings/{dataset_name}/{run}/generated/")
+    #generate_embeddings(dataset, metadata, {'molecule': 0, 'atom':1, 'bond':2}, model_save_path = f"models/gin_embeddings/{dataset_name}/{run}/", data_save_path=f"data/gin_embeddings/{dataset_name}/{run}/generated/")
     # compute structural embeddings using GIN
     pass
     # for each table in dataset
     ids = {}
     for table in metadata.get_tables():
-        gin_embeddings = pd.read_csv(f'data/gin_embeddings/rossmann-store-sales/{run}/generated/{table}_embeddings.csv', index_col=0)
+        gin_embeddings = pd.read_csv(f'data/gin_embeddings/{dataset_name}/{run}/generated/{table}_embeddings.csv', index_col=0)
         ids[table] = gin_embeddings.index.tolist()
         gin_embeddings = gin_embeddings.to_numpy()
         conditional_embeddings = [gin_embeddings]
@@ -40,7 +41,7 @@ def main():
             parent_ids = tables[parent][metadata.get_primary_key(parent)].tolist()
             for fk in metadata.get_foreign_keys(parent, table):     
                 # TODO get foregin keys from the graphs
-                fks = pd.read_csv(f'data/gin_embeddings/rossmann-store-sales/{run}/generated/{table}_{fk}_fks.csv')
+                fks = pd.read_csv(f'data/gin_embeddings/{dataset_name}/{run}/generated/{table}_{fk}_fks.csv')
                 foreign_keys[fk] = fks['parent'].tolist()
                 cond_embeddings = np.zeros((len(fks), parent_latent_embeddings.shape[1], parent_latent_embeddings.shape[2]))
                 for i, id in enumerate(foreign_keys[fk]):

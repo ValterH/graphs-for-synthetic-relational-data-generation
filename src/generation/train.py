@@ -19,6 +19,7 @@ def main():
     retrain_vae = False
     cond = 'mlp'
     run = 'GIN_DEG_COND_MLP'
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
     # read data
     metadata = load_metadata(dataset_name)
     tables = load_tables(dataset_name, split='train')
@@ -36,11 +37,11 @@ def main():
         X_num, X_cat, categories, d_numerical = preprocess(data_dir, task_type = 'binclass', concat=False)
         if retrain_vae or not os.path.exists(f'ckpt/{table}/vae/decoder.pt'):
             print(f'Training VAE for table {table}')
-            train_vae(X_num, X_cat, categories, d_numerical, info, epochs=4000)
+            train_vae(X_num, X_cat, categories, d_numerical, info, epochs=4000, device=device)
         else:
             print(f'Reusing VAE for table {table}')
         # combine vae embeddings from parent tables with structural embeddings to condition diffusion
-        gin_embeddings  =  pd.read_csv(f'data/gin_embeddings/rossmann-store-sales/{run}/{table}_embeddings.csv').to_numpy()
+        gin_embeddings  =  pd.read_csv(f'data/gin_embeddings/{dataset_name}/{run}/{table}_embeddings.csv').to_numpy()
         conditional_embeddings = [gin_embeddings]
         for parent in metadata.get_parents(table):
             parent_embeddings = []
@@ -63,12 +64,13 @@ def main():
         else:
             conditional_embeddings = conditional_embeddings[0]
         
+        os.makedirs(f'ckpt/{table}/{run}', exist_ok=True)
         np.save(f'ckpt/{table}/{run}/cond_train_z.npy', conditional_embeddings)
 
         # train conditional diffusion
         train_z, train_z_cond, _, ckpt_path, _ = get_input_train(table, is_cond=True, run=run)
         print(f'Training conditional diffusion for table {table}')
-        train_diff(train_z, train_z_cond, ckpt_path, epochs=10000, is_cond=True, cond=cond, device='cuda:0')
+        train_diff(train_z, train_z_cond, ckpt_path, epochs=10000, is_cond=True, cond=cond, device=device)
     
 # GENERATION
 # sample skeletons from GraphRNN

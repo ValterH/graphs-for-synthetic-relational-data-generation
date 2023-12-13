@@ -73,7 +73,6 @@ def get_gin_embeddings(model, data):
 
 
 def get_rossmann_embeddings(model_save_path = "models/gin_embeddings/rossmann-store-sales/", data_save_path="data/gin_embeddings/rossmann-store-sales/"):
-    
     # data
     rossmann_dataset = get_rossmann_dataset()
     data = rossmann_dataset[0]
@@ -138,13 +137,13 @@ def get_mutagenesis_embeddings(model_save_path = "models/gin_embeddings/mutagene
     bond_embeddings_df.to_csv(data_save_path + "bond_embeddings.csv")
 
 
-def generate_embeddings(dataset, metadata, table_mapping, model_save_path, data_save_path, in_channels=1, hidden_channels=32, num_layers=1, out_channels=1, jk="last"):
+def generate_embeddings(dataset, metadata, table_mapping, model_save_path, data_save_path, in_channels=1, hidden_channels=32, out_channels=1, jk="last"):
     # data
     data = dataset[0]
     
     # model
     # model = GINModel(num_features=1)
-    model = GIN(in_channels=in_channels, hidden_channels=hidden_channels, num_layers=num_layers, out_channels=out_channels, jk=jk)
+    model = GIN(in_channels=in_channels, hidden_channels=hidden_channels, num_layers=len(metadata.get_tables()) - 1, out_channels=out_channels, jk=jk)
     # load model
     model.load_state_dict(torch.load(model_save_path + "model.pt"))
     
