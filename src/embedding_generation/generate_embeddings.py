@@ -158,44 +158,31 @@ def generate_embeddings(dataset, metadata, table_mapping, model_save_path, data_
         os.makedirs(data_save_path, exist_ok=True)
         table_embeddings_df.to_csv(data_save_path + f"{table_name}_embeddings.csv")
         for parent in metadata.get_parents(table_name):
-            for fk in metadata.get_foreign_keys(parent, table_name):
+            for i, fk in enumerate(metadata.get_foreign_keys(parent, table_name)):
+                
                 pyg_ids = np.where(table_mask)[0]
+                parent_pyg_ids = np.where(data.x[:, 0] == table_mapping[parent])[0]
                 # TODO: this works only for rossmann we should add edge types to graphs
                 edge_index = pd.DataFrame(data.edge_index.T, columns=['source', 'target'])
-                fks = pd.DataFrame(data.index[edge_index[edge_index['target'].isin(pyg_ids)]['source'].values], columns=['parent'])
+                
+                # select only edges that contain this table's nodes as targets 
+                # (currently we have this stored as undirected graph in the edge index so this is not the case)
+                edge_index = edge_index[edge_index['target'].isin(pyg_ids)]
+                edge_index = edge_index[edge_index['source'].isin(parent_pyg_ids)]
+                
+                # select the ith edge for each parent node (eg. atom1_id , atom2_id)
+                edge_index = edge_index[edge_index.groupby("target").cumcount() == i]
+                
+                # parent = parent node id
+                fks = pd.DataFrame(data.index[edge_index['source'].values], columns=['parent'])
+                
                 fks.index = node_ids.numpy()
+                # id = child node id
                 fks['id'] = node_ids.numpy()
                 fks.sort_index(inplace=True)
                 fks.to_csv(data_save_path + f"{table_name}_{fk}_fks.csv", index=False)
-
-
-        
-############################################################################################
-
-
-# # Convert embeddings to a numpy array
-# embeddings_array = last_layer_embeddings.cpu().numpy()
-
-# # Perform PCA
-# pca = PCA(n_components=2)  # You can adjust the number of components as needed
-# embeddings_pca = pca.fit_transform(embeddings_array)
-
-# # Visualization
-# plt.figure(figsize=(8, 6))
-
-# pca_0_x, pca_0_y = embeddings_pca[data.x[:, 0] == 0, 0], embeddings_pca[data.x[:, 0] == 0, 1]
-# pca_1_x, pca_1_y = embeddings_pca[data.x[:, 0] == 1, 0], embeddings_pca[data.x[:, 0] == 1, 1]
-# pca_2_x, pca_2_y = embeddings_pca[data.x[:, 0] == 2, 0], embeddings_pca[data.x[:, 0] == 2, 1]
-
-# plt.scatter(pca_0_x, pca_0_y, alpha=0.5, label="Molecule", color="red")
-# plt.scatter(pca_1_x, pca_1_y, alpha=0.5, label="Atom", color="blue")
-# plt.scatter(pca_2_x, pca_2_y, alpha=0.5, label="Bond", color="green")
-
-# # plt.scatter(embeddings_pca[:, 0], embeddings_pca[:, 1], alpha=0.5)
-# plt.title('PCA Visualization of Embeddings')
-# plt.xlabel('Principal Component 1')
-# plt.ylabel('Principal Component 2')
-# plt.show()
+                
+                pass
 
 ############################################################################################
 
@@ -204,8 +191,17 @@ def main():
     # Set a seed for PyTorch
     SEED = 42  # Replace 42 with the desired seed value
     torch.manual_seed(SEED)
-    rossmann_embeddings = get_rossmann_embeddings()
-    mutagenesis_embeddings = get_mutagenesis_embeddings()
+    
+    from src.data.utils import load_metadata
+    
+    mutagenesis = get_mutagenesis_dataset()
+    mutagenesis_metadata = load_metadata("mutagenesis")
+    generate_embeddings(mutagenesis, mutagenesis_metadata, {"molecule": 0, "atom": 1, "bond": 2}, "models/gin_embeddings/mutagenesis/", "data/debug/mutagenesis/")
+    
+    
+    rossmann = get_rossmann_dataset()
+    rossmann_metadata = load_metadata("rossmann-store-sales")
+    generate_embeddings(rossmann, rossmann_metadata, {"store": 0, "test": 1}, "models/gin_embeddings/rossmann/", "data/debug/rossmann/")
     
     pass
 
