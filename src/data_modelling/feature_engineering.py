@@ -75,7 +75,7 @@ def add_index(G):
 ############################################################################################
 
 
-def filter_graph_features_with_mapping(G, features_to_keep, feature_mapping):
+def filter_graph_features_with_mapping(G, features_to_keep, feature_mappings):
     # TODO: write docstring
     
     filtered_graph = nx.Graph()
@@ -84,9 +84,9 @@ def filter_graph_features_with_mapping(G, features_to_keep, feature_mapping):
         updated_features = {}
         for feature in features_to_keep:
             # Check if the feature needs mapping
-            if feature in feature_mapping:
+            if feature in feature_mappings:
                 # Map the feature value using the specified mapping
-                mapping = feature_mapping[feature]
+                mapping = feature_mappings[feature]
                 updated_features[feature] = mapping.get(data.get(feature))
             else:
                 # Keep the feature as is
