@@ -137,8 +137,9 @@ def discriminative_detection(original, synthetic, clf=LogisticRegression(solver=
         transformed_original['Date'] = pd.to_numeric(pd.to_datetime(transformed_original['Date']))
         transformed_synthetic['Date'] = pd.to_numeric(pd.to_datetime(transformed_synthetic['Date']))
         # TODO: check if Date column is still problematic
-        transformed_original.drop('Date', axis=1, inplace=True)
-        transformed_synthetic.drop('Date', axis=1, inplace=True)
+        # TODO: decide what to do here
+        # transformed_original.drop('Date', axis=1, inplace=True)
+        # transformed_synthetic.drop('Date', axis=1, inplace=True)
 
     # synthetic labels are 1 as this is what we are interested in (for precision and recall)
     y = np.hstack([
