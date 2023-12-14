@@ -47,25 +47,34 @@ class GraphRelationalDataset(InMemoryDataset):
 ############################################################################################
 
 
-def sample_relational_distribution(dataset_name, num_graphs, features=None, feature_mappings=None, seed=42):    
+def sample_relational_distribution(dataset_name, num_graphs, features=None, feature_mappings=None, target=None, seed=42):    
     # check if we need to set default parameters
     if features is None:
         features = DEFAULTS[dataset_name]["features"]
     if feature_mappings is None:
         feature_mappings = DEFAULTS[dataset_name]["feature_mappings"]
-    
+    if target is None:
+        target = DEFAULTS[dataset_name]["target"]
     
     subgraphs, _ = database_to_subgraphs(dataset_name)
+    
+    # add the index and target features
+    if target == "k_hop_degrees":
+        subgraphs = [add_k_hop_degrees(G, k=2) for G in subgraphs]
+        target_length = 2
+    else:
+        raise ValueError(f"Target {target} not supported")
     
     # set seed and sample with replacement
     random.seed(seed)
     sampled_subgraphs = random.choices(subgraphs, k = num_graphs)
     
     # filter and map the features
-    sampled_subgraphs = [filter_graph_features_with_mapping(G, features, feature_mappings) for G in sampled_subgraphs]
+    features_to_keep = [*features, target]
+    sampled_subgraphs = [filter_graph_features_with_mapping(G, features_to_keep, feature_mappings) for G in sampled_subgraphs]
 
     # convert to pytorch geometric Data objects
-    sampled_subgraphs = [from_networkx(G, group_node_attrs=features) for G in sampled_subgraphs]
+    sampled_subgraphs = [from_networkx(G, group_node_attrs=features_to_keep) for G in sampled_subgraphs]
     
     previous_graph_nodes = 0
     for i in range(len(sampled_subgraphs)):
@@ -76,8 +85,14 @@ def sample_relational_distribution(dataset_name, num_graphs, features=None, feat
     for data in sampled_subgraphs[1:]:
         all_graphs_data.edge_index = torch.cat((all_graphs_data.edge_index, data.edge_index), dim=1)
         all_graphs_data.x = torch.cat((all_graphs_data.x, data.x), dim=0)
+    # set the index
     all_graphs_data.index = torch.tensor(range(all_graphs_data.x.shape[0]))
+    # separate the features and target
+    all_graphs_data.y = all_graphs_data.x[:, (all_graphs_data.x.shape[1] - target_length):].type(torch.float)
+    all_graphs_data.x = all_graphs_data.x[:, :(all_graphs_data.x.shape[1] - target_length)].type(torch.float)
     
+    if os.path.exists(f"data/pyg/{dataset_name}/sample"):
+        shutil.rmtree(f"data/pyg/{dataset_name}/sample")
     dataset = GraphRelationalDataset(root=f"data/pyg/{dataset_name}/sample", data_list=[all_graphs_data])
     dataset.process()
     return dataset
@@ -118,7 +133,8 @@ def create_pyg_dataset(dataset_name, features=None, feature_mappings=None, targe
     data.y = data.x[:, (ncols - target_length):].type(torch.float)
     data.x = data.x[:, 1:(ncols - target_length)].type(torch.float)
     
-    
+    if os.path.exists(f"data/pyg/{dataset_name}"):
+        shutil.rmtree(f"data/pyg/{dataset_name}")
     dataset = GraphRelationalDataset(root=f"data/pyg/{dataset_name}", data_list=[data])
     dataset.process()
     return dataset
@@ -130,10 +146,9 @@ def main():
     rossmann_dataset = create_pyg_dataset("rossmann-store-sales")
     mutagenesis_dataset = create_pyg_dataset("mutagenesis")
     
-    rossmann_sample = sample_relational_distribution("rossmann-store-sales", 1000, seed=420)
-    mutagenesis_sample = sample_relational_distribution("mutagenesis",  1000, seed=420)
-    
-    pass
+    rossmann_sample = sample_relational_distribution("rossmann-store-sales", 1000)
+    mutagenesis_sample = sample_relational_distribution("mutagenesis",  1000)
+
 
 if __name__ == "__main__":
     main()
