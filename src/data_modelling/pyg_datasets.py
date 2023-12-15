@@ -7,6 +7,7 @@ import networkx as nx
 from torch_geometric.utils import from_networkx
 from torch_geometric.data import InMemoryDataset
 
+from src.data.utils import load_metadata
 from src.data_modelling.table_to_graph import database_to_graph, database_to_subgraphs
 from src.data_modelling.feature_engineering import add_index, add_k_hop_degrees, filter_graph_features_with_mapping, add_k_hop_vectors
 
@@ -63,8 +64,7 @@ def sample_relational_distribution(dataset_name, num_graphs, features=None, feat
         subgraphs = [add_k_hop_degrees(G, k=2) for G in subgraphs]
         target_length = 2
     elif target == "k_hop_vectors":
-        subgraphs = [add_k_hop_vectors(G, k=3) for G in subgraphs]
-        # target_length = subgraphs[0].nodes[0]['k_hop_vectors'].shape[1]
+        subgraphs = [add_k_hop_vectors(G, k=3, node_types=load_metadata(dataset_name).get_tables()) for G in subgraphs]
         target_length = len(subgraphs[0].nodes[0]['k_hop_vectors'])
     else:
         raise ValueError(f"Target {target} not supported")
@@ -123,8 +123,7 @@ def create_pyg_dataset(dataset_name, features=None, feature_mappings=None, targe
         G = add_k_hop_degrees(G, k=2)
         target_length = 2
     elif target == "k_hop_vectors":
-        G = add_k_hop_vectors(G, k=3)
-        # target_length = G.nodes[0]['k_hop_vectors'].shape[1]
+        G = add_k_hop_vectors(G, k=3, node_types=load_metadata(dataset_name).get_tables())
         target_length = len(G.nodes[0]['k_hop_vectors'])
     else:
         raise ValueError(f"Target {target} not supported")
@@ -151,11 +150,21 @@ def create_pyg_dataset(dataset_name, features=None, feature_mappings=None, targe
 ############################################################################################
 
 def main():    
-    rossmann_dataset = create_pyg_dataset("rossmann-store-sales")
-    mutagenesis_dataset = create_pyg_dataset("mutagenesis")
+    # whole dataset
+    # rossmann_dataset = create_pyg_dataset("rossmann-store-sales")
+    # mutagenesis_dataset = create_pyg_dataset("mutagenesis")
+    # # sample
+    # rossmann_sample = sample_relational_distribution("rossmann-store-sales", 1000)
+    # mutagenesis_sample = sample_relational_distribution("mutagenesis",  1000)
     
-    rossmann_sample = sample_relational_distribution("rossmann-store-sales", 1000)
-    mutagenesis_sample = sample_relational_distribution("mutagenesis",  1000)
+    
+    # k-hop vectors (k-hop degrees by type)
+    # whole dataset
+    rossmann_dataset = create_pyg_dataset("rossmann-store-sales", target="k_hop_vectors")
+    mutagenesis_dataset = create_pyg_dataset("mutagenesis", target="k_hop_vectors")
+    # sample
+    rossmann_sample = sample_relational_distribution("rossmann-store-sales", 1000, target="k_hop_vectors")
+    mutagenesis_sample = sample_relational_distribution("mutagenesis",  1000, target="k_hop_vectors")
 
 
 if __name__ == "__main__":
