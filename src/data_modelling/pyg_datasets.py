@@ -8,7 +8,7 @@ from torch_geometric.utils import from_networkx
 from torch_geometric.data import InMemoryDataset
 
 from src.data_modelling.table_to_graph import database_to_graph, database_to_subgraphs
-from src.data_modelling.feature_engineering import add_index, add_k_hop_degrees, filter_graph_features_with_mapping
+from src.data_modelling.feature_engineering import add_index, add_k_hop_degrees, filter_graph_features_with_mapping, add_k_hop_vectors
 
 ############################################################################################
 DEFAULTS = {
@@ -62,6 +62,10 @@ def sample_relational_distribution(dataset_name, num_graphs, features=None, feat
     if target == "k_hop_degrees":
         subgraphs = [add_k_hop_degrees(G, k=2) for G in subgraphs]
         target_length = 2
+    elif target == "k_hop_vectors":
+        subgraphs = [add_k_hop_vectors(G, k=3) for G in subgraphs]
+        # target_length = subgraphs[0].nodes[0]['k_hop_vectors'].shape[1]
+        target_length = len(subgraphs[0].nodes[0]['k_hop_vectors'])
     else:
         raise ValueError(f"Target {target} not supported")
     
@@ -118,6 +122,10 @@ def create_pyg_dataset(dataset_name, features=None, feature_mappings=None, targe
     if target == "k_hop_degrees":
         G = add_k_hop_degrees(G, k=2)
         target_length = 2
+    elif target == "k_hop_vectors":
+        G = add_k_hop_vectors(G, k=3)
+        # target_length = G.nodes[0]['k_hop_vectors'].shape[1]
+        target_length = len(G.nodes[0]['k_hop_vectors'])
     else:
         raise ValueError(f"Target {target} not supported")
     

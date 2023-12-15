@@ -38,17 +38,13 @@ def train_pipline(dataset_name, run, retrain_vae=False, cond="mlp", epochs_gnn=2
     # train generative model for each table (VAE with latent conditional diffusion)
     for table in metadata.get_tables():
         # train vae
-        with open(f'tabsyn/data/{table}/info.json', 'r') as f:
-            # TODO: move info into train_vae
-            info = json.load(f)
         
         if retrain_vae or not os.path.exists(f'ckpt/{table}/vae/decoder.pt'):
-            X_num, X_cat, categories, d_numerical = preprocess(f'tabsyn/data/{table}', task_type = 'binclass', concat=False)
             print(f'Training VAE for table {table}')
-            train_vae(X_num, X_cat, categories, d_numerical, info, epochs=epochs_vae, device=device)
+            X_num, X_cat, categories, d_numerical = preprocess(f'tabsyn/data/{table}', task_type = 'binclass', concat=False)
+            train_vae(X_num, X_cat, categories, d_numerical, ckpt_dir = f'ckpt/{table}/vae' , epochs=epochs_vae, device=device)
         else:
             print(f'Reusing VAE for table {table}')
-            
             
         # combine vae embeddings from parent tables with structural embeddings from the current table to obtain condition diffusion
         gin_embeddings  =  pd.read_csv(f'{gin_data_save_path}{table}_embeddings.csv', index_col=0)

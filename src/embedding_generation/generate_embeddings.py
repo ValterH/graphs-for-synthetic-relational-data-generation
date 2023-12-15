@@ -25,17 +25,22 @@ GIN_DEFAULTS = {
     
     # training params
     "epochs": 250,
+
+    # data params
+    "target": "k_hop_neighbors",
 }
 
 
 ############################################################################################
 
-def train_gin(dataset_name, model_save_path, hidden_channels=32, jk="last", norm="batch", lr=0.01, epochs=250, seed=42):
+def train_gin(dataset_name, model_save_path, target=None, hidden_channels=32, jk="last", norm="batch", lr=0.01, epochs=250, seed=42):
+    if target is None:
+        target = GIN_DEFAULTS["target"]
     torch.manual_seed(seed)
     
     
     metadata = load_metadata(dataset_name)
-    dataset = create_pyg_dataset(dataset_name)
+    dataset = create_pyg_dataset(dataset_name, target=target)
     # our dataset contains only a single graph (union of disjoint graphs) representing the entire database
     data = dataset[0] 
     
@@ -131,17 +136,17 @@ def generate_embeddings(dataset, metadata, model_path, data_save_path, hidden_ch
 
 
 def main():
-    train_gin("rossmann-store-sales", "models/gin_embeddings/rossmann-store-sales/")
-    train_gin("mutagenesis", "models/gin_embeddings/mutagenesis/")
+    train_gin("rossmann-store-sales", "models/gin_embeddings/rossmann-store-sales/", target="k_hop_degrees")
+    train_gin("mutagenesis", "models/gin_embeddings/mutagenesis/", target="k_hop_degrees")
     
     # original dataset embeddings
-    generate_embeddings(create_pyg_dataset("rossmann-store-sales"), load_metadata("rossmann-store-sales"), "models/gin_embeddings/rossmann-store-sales/", "data/gin_embeddings/rossmann-store-sales/")
-    generate_embeddings(create_pyg_dataset("mutagenesis"), load_metadata("mutagenesis"), "models/gin_embeddings/mutagenesis/", "data/gin_embeddings/mutagenesis/")
+    generate_embeddings(create_pyg_dataset("rossmann-store-sales", target="k_hop_degrees"), load_metadata("rossmann-store-sales"), "models/gin_embeddings/rossmann-store-sales/", "data/gin_embeddings/rossmann-store-sales/")
+    generate_embeddings(create_pyg_dataset("mutagenesis", target="k_hop_degrees"), load_metadata("mutagenesis"), "models/gin_embeddings/mutagenesis/", "data/gin_embeddings/mutagenesis/")
     
     # sampled dataset embeddings
     from src.data_modelling.pyg_datasets import sample_relational_distribution
-    generate_embeddings(sample_relational_distribution("rossmann-store-sales", 200), load_metadata("rossmann-store-sales"), "models/gin_embeddings/rossmann-store-sales/", "data/gin_embeddings/rossmann-store-sales/generated/")
-    generate_embeddings(sample_relational_distribution("mutagenesis", 200), load_metadata("mutagenesis"), "models/gin_embeddings/mutagenesis/", "data/gin_embeddings/mutagenesis/generated/")
+    generate_embeddings(sample_relational_distribution("rossmann-store-sales", 200, target="k_hop_degrees"), load_metadata("rossmann-store-sales"), "models/gin_embeddings/rossmann-store-sales/", "data/gin_embeddings/rossmann-store-sales/generated/")
+    generate_embeddings(sample_relational_distribution("mutagenesis", 200, target="k_hop_degrees"), load_metadata("mutagenesis"), "models/gin_embeddings/mutagenesis/", "data/gin_embeddings/mutagenesis/generated/")
 
 
 if __name__ == "__main__":

@@ -137,7 +137,6 @@ def discriminative_detection(original, synthetic, clf=LogisticRegression(solver=
         transformed_original['Date'] = pd.to_numeric(pd.to_datetime(transformed_original['Date']))
         transformed_synthetic['Date'] = pd.to_numeric(pd.to_datetime(transformed_synthetic['Date']))
         # TODO: check if Date column is still problematic
-        # TODO: decide what to do here
         # transformed_original.drop('Date', axis=1, inplace=True)
         # transformed_synthetic.drop('Date', axis=1, inplace=True)
 
@@ -148,34 +147,48 @@ def discriminative_detection(original, synthetic, clf=LogisticRegression(solver=
     ])
     X = pd.concat([transformed_original, transformed_synthetic], axis=0)
 
-    # TODO: we can do cross validation here
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, shuffle=True, stratify=y)
-
     ht = CustomHyperTransformer()
-    X_train = ht.fit_transform(X_train)
-    X_test = ht.transform(X_test)
+    X = ht.fit_transform(X)
 
     model = Pipeline([
         ('scaler', StandardScaler()),
         ('clf', clf)
     ])
 
-    model.fit(X_train, y_train)
-    probs = model.predict_proba(X_test)
-    y_pred = probs.argmax(axis=1)
 
-    feature_importances = list(zip(X_train.columns, model['clf'].feature_importances_))
-    feature_importances.sort(key=lambda x: x[1], reverse=True)
-    for feature, importance in feature_importances:
-        print(f'{feature :<12}: {importance:.3}')
+    def cross_validation(model, X, y, cv=5):
+        folds = np.random.randint(0, cv, size=X.shape[0])
+        scores = {
+            'zero_one': [],
+            'log_loss': [],
+        }
+        for i in range(cv):
+            model.fit(X[folds != i], y[folds != i])
+            probs = model.predict_proba(X[folds == i])
+            preds = probs.argmax(axis=1)
+            scores['zero_one'].append((preds == y[folds == i]).astype(int))
+            scores['log_loss'].append(log_loss(y[folds == i], probs))
+        scores['zero_one'] = np.hstack(scores['zero_one']).tolist()
+        scores['log_loss'] = np.hstack(scores['log_loss'])
+        return scores
 
-    results = {
-        'zero_one': (y_test == y_pred).astype(int).tolist(),
-        'log_loss': log_loss(y_test, probs),
-        'accuracy': accuracy_score(y_test, y_pred)
-    }
+    
+    scores = cross_validation(model, X, y, cv=5)
 
-    return results
+    # # Feature importance
+    # X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, shuffle=True, stratify=y)
+
+    # ht = CustomHyperTransformer()
+    # X_train = ht.fit_transform(X_train)
+    # X_test = ht.transform(X_test)
+    # model.fit(X_train, y_train)
+
+    # feature_importances = list(zip(X_train.columns, model['clf'].feature_importances_))
+    # feature_importances.sort(key=lambda x: x[1], reverse=True)
+    # for feature, importance in feature_importances:
+    #     print(f'{feature :<12}: {importance:.3}')
+
+    return scores
 
 
 def parent_child_discriminative_detection(original, synthetic, clf=LogisticRegression(solver='lbfgs', max_iter=100), 
