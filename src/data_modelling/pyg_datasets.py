@@ -1,3 +1,5 @@
+import os
+import shutil
 import random
 
 import torch
@@ -5,18 +7,28 @@ import networkx as nx
 from torch_geometric.utils import from_networkx
 from torch_geometric.data import InMemoryDataset
 
-from src.data_modelling.table_to_graph import (
-    get_rossmann_graph,
-    get_rossmann_subgraphs, 
-    get_mutagenesis_graph,
-    get_mutagenesis_subgraphs
-)
+from src.data.utils import load_metadata
+from src.data_modelling.table_to_graph import database_to_graph, database_to_subgraphs
+from src.data_modelling.feature_engineering import add_index, add_k_hop_degrees, filter_graph_features_with_mapping, add_k_hop_vectors
 
 ############################################################################################
-# reference: https://pytorch-geometric.readthedocs.io/en/latest/tutorial/create_dataset.html
+DEFAULTS = {
+    "rossmann-store-sales": {
+        "features": ["node_type"],
+        "feature_mappings": {"node_type": {"store": 0, "test": 1}},
+        "target": "k_hop_degrees"
+    },
+    "mutagenesis": {
+        "features": ["node_type"],
+        "feature_mappings": {"node_type": {"molecule": 0, "atom": 1, "bond": 2}},
+        "target": "k_hop_degrees"
+    },
+}
+
+
 ############################################################################################
 
-class MyDataset(InMemoryDataset):
+class GraphRelationalDataset(InMemoryDataset):
     def __init__(self, root, data_list, transform=None):
         self.data_list = data_list
         super().__init__(root, transform)
@@ -27,167 +39,133 @@ class MyDataset(InMemoryDataset):
         return 'data.pt'
 
     def process(self):
+        # TODO: make sure we overwrite the existing data if we call process
+        # if os.path.exists(self.root):
+        #     shutil.rmtree(self.root)
         self.save(self.data_list, self.processed_paths[0])
-
-
-class Rossmann(MyDataset):
-    def __init__(self, root, data_list, transform=None):
-        super().__init__(root, data_list, transform)
-
-
-class Mutagenesis(MyDataset):
-    def __init__(self, root, data_list, transform=None):
-        super().__init__(root, data_list, transform)
 
 
 ############################################################################################
 
-_ROSSMANN_FEATURES_TO_KEEP_GIN = ["index", "type", "k-hop_degrees"]
-_ROSSMANN_FEATURES_LENGTH = 1
-_ROSSMANN_FEATURE_MAPPING_GIN = {"type": {"store": 0, "sale": 1}}
 
-_MUTAGENESIS_FEATURES_TO_KEEP_GIN = ["index", "type", "k-hop_degrees"]
-_MUTAGENESIS_FEATURES_LENGTH = 1
-_MUTAGENESIS_FEATURE_MAPPING_GIN = {"type": {"molecule": 0, "atom": 1, "bond": 2}}
-
-
-def sample_relational_distribution(dataset_name, num_graphs, seed=42):
-    if dataset_name == "rossmann-store-sales":
-        features = _ROSSMANN_FEATURES_TO_KEEP_GIN
-        features_length = _ROSSMANN_FEATURES_LENGTH
-        dataset_class = Rossmann
-        root = "data/pyg/rossmann"
-        subgraphs = get_rossmann_subgraphs(features=features, feature_mappings=_ROSSMANN_FEATURE_MAPPING_GIN)
-    elif dataset_name == "mutagenesis":
-        features = _MUTAGENESIS_FEATURES_TO_KEEP_GIN
-        features_length = _MUTAGENESIS_FEATURES_LENGTH
-        dataset_class = Mutagenesis
-        root = "data/pyg/mutagenesis"
-        subgraphs = get_mutagenesis_subgraphs(features=features, feature_mappings=_MUTAGENESIS_FEATURE_MAPPING_GIN)
-    else:
-        raise ValueError(f"Dataset {dataset_name} not supported")
-    random.seed(seed)
-    sampled_subgraphs = random.sample(subgraphs, num_graphs)
-    G = sampled_subgraphs[0]
-    for i in range(1, len(sampled_subgraphs)):
-        G = nx.disjoint_union(G, sampled_subgraphs[i])
-    data_list = [from_networkx(G, group_node_attrs=features)]
-    return from_data_list(data_list, dataset_class=dataset_class, root=root, features_length=features_length, target=False)
-
-
-def from_data_list(data_list, dataset_class=Rossmann, root="data/pyg/rossmann", features_length=_ROSSMANN_FEATURES_LENGTH, target=True):
-    # we assume that the target is the last feature
-    # from_networkx doesn't support specifying the target so we have to do it manually
-    if target:
-        for data in data_list:
-            # we assume that the first column is the index (needed for future mappings)
-            data.index = data.x[:, 0]
-            # we assume that the target is located at the last few columns
-            data.y = data.x[:, (features_length + 1):].view(-1, data.x.shape[1] - features_length - 1).type(torch.float)
-            # we assume the features are located in the middle columns
-            data.x = data.x[:, 1:(features_length + 1)].type(torch.float)
+def sample_relational_distribution(dataset_name, num_graphs, features=None, feature_mappings=None, target=None, seed=42):    
+    # check if we need to set default parameters
+    if features is None:
+        features = DEFAULTS[dataset_name]["features"]
+    if feature_mappings is None:
+        feature_mappings = DEFAULTS[dataset_name]["feature_mappings"]
+    if target is None:
+        target = DEFAULTS[dataset_name]["target"]
     
-    # TODO: if we already have saved files this will not update them
-    # process() should do it afaik but its not working ...
-    dataset = dataset_class(root=root, data_list=data_list)
+    subgraphs, _ = database_to_subgraphs(dataset_name)
+    
+    # add the index and target features
+    if target == "k_hop_degrees":
+        subgraphs = [add_k_hop_degrees(G, k=2) for G in subgraphs]
+        target_length = 2
+    elif target == "k_hop_vectors":
+        subgraphs = [add_k_hop_vectors(G, k=3, node_types=load_metadata(dataset_name).get_tables()) for G in subgraphs]
+        target_length = len(subgraphs[0].nodes[0]['k_hop_vectors'])
+    else:
+        raise ValueError(f"Target {target} not supported")
+    
+    # set seed and sample with replacement
+    random.seed(seed)
+    sampled_subgraphs = random.choices(subgraphs, k = num_graphs)
+    
+    # filter and map the features
+    features_to_keep = [*features, target]
+    sampled_subgraphs = [filter_graph_features_with_mapping(G, features_to_keep, feature_mappings) for G in sampled_subgraphs]
+
+    # convert to pytorch geometric Data objects
+    sampled_subgraphs = [from_networkx(G, group_node_attrs=features_to_keep) for G in sampled_subgraphs]
+    
+    previous_graph_nodes = 0
+    for i in range(len(sampled_subgraphs)):
+        sampled_subgraphs[i].edge_index += previous_graph_nodes
+        previous_graph_nodes += len(sampled_subgraphs[i].x)
+    # concat all of the tensors
+    all_graphs_data = sampled_subgraphs[0]
+    for data in sampled_subgraphs[1:]:
+        all_graphs_data.edge_index = torch.cat((all_graphs_data.edge_index, data.edge_index), dim=1)
+        all_graphs_data.x = torch.cat((all_graphs_data.x, data.x), dim=0)
+    # set the index
+    all_graphs_data.index = torch.tensor(range(all_graphs_data.x.shape[0]))
+    # separate the features and target
+    all_graphs_data.y = all_graphs_data.x[:, (all_graphs_data.x.shape[1] - target_length):].type(torch.float)
+    all_graphs_data.x = all_graphs_data.x[:, :(all_graphs_data.x.shape[1] - target_length)].type(torch.float)
+    
+    if os.path.exists(f"data/pyg/{dataset_name}/sample"):
+        shutil.rmtree(f"data/pyg/{dataset_name}/sample")
+    dataset = GraphRelationalDataset(root=f"data/pyg/{dataset_name}/sample", data_list=[all_graphs_data])
     dataset.process()
     return dataset
 
 
-def get_rossmann_dataset(root="data/pyg/rossmann", features=_ROSSMANN_FEATURES_TO_KEEP_GIN, features_length=_ROSSMANN_FEATURES_LENGTH, feature_mappings=_ROSSMANN_FEATURE_MAPPING_GIN, target=True):
-    
-    G = get_rossmann_graph(root_nodes=False, features=features, feature_mappings=feature_mappings)
-    rossmann_data_list = [from_networkx(G, group_node_attrs=features)]
-    # we assume that the target is the last feature
-    # from_networkx doesn't support specifying the target so we have to do it manually
-    if target:
-        for data in rossmann_data_list:
-            # we assume that the first column is the index (needed for future mappings)
-            data.index = data.x[:, 0]
-            # we assume that the target is located at the last few columns
-            data.y = data.x[:, (features_length + 1):].view(-1, data.x.shape[1] - features_length - 1).type(torch.float)
-            # we assume the features are located in the middle columns
-            data.x = data.x[:, 1:(features_length + 1)].type(torch.float)
-    
-    # TODO: if we already have saved files this will not update them
-    # process() should do it afaik but its not working ...
-    rossmann = Rossmann(root=root, data_list=rossmann_data_list)
-    rossmann.process()
-    return rossmann
+############################################################################################
 
 
-def get_rossmann_subgraphs_dataset(root="data/pyg/rossmann_subgraphs", features=_ROSSMANN_FEATURES_TO_KEEP_GIN, features_length=_ROSSMANN_FEATURES_LENGTH, feature_mappings=_ROSSMANN_FEATURE_MAPPING_GIN, target=True):
+def create_pyg_dataset(dataset_name, features=None, feature_mappings=None, target=None):
+    # check if we need to set default parameters
+    if features is None:
+        features = DEFAULTS[dataset_name]["features"]
+    if feature_mappings is None:
+        feature_mappings = DEFAULTS[dataset_name]["feature_mappings"]
+    if target is None:
+        target = DEFAULTS[dataset_name]["target"]
     
-    subgraphs = get_rossmann_subgraphs(features=features, feature_mappings=feature_mappings)
-    rossmann_data_list = [from_networkx(G, group_node_attrs=features) for G in  subgraphs]
     
-    # we assume that the target is the last feature
-    # from_networkx doesn't support specifying the target so we have to do it manually
-    if target:
-        for data in rossmann_data_list:
-            # we assume that the first column is the index (needed for future mappings)
-            data.index = data.x[:, 0]
-            # we assume that the target is located at the last few columns
-            data.y = data.x[:, (features_length + 1):].view(-1, data.x.shape[1] - features_length - 1).type(torch.float)
-            # we assume the features are located in the middle columns
-            data.x = data.x[:, 1:(features_length + 1)].type(torch.float)
+    # load the graph representing the database
+    G, _ = database_to_graph(dataset_name)
     
-    # TODO: if we already have saved files this will not update them
-    # process() should do it afaik but its not working ...
-    rossmann = Rossmann(root=root, data_list=rossmann_data_list)
-    rossmann.process()
-    return rossmann
+    G = add_index(G)
+    if target == "k_hop_degrees":
+        G = add_k_hop_degrees(G, k=2)
+        target_length = 2
+    elif target == "k_hop_vectors":
+        G = add_k_hop_vectors(G, k=3, node_types=load_metadata(dataset_name).get_tables())
+        target_length = len(G.nodes[0]['k_hop_vectors'])
+    else:
+        raise ValueError(f"Target {target} not supported")
+    
+    features_to_keep = ["index", *features, target]
+    G = filter_graph_features_with_mapping(G, features_to_keep, feature_mappings)
+    
+    # convert to pytorch geometric Data object
+    data = from_networkx(G, group_node_attrs=features_to_keep)
+    
+    # because they don't support specifying node targets or arbitrary arguments we have to relabel manually
+    nrows, ncols = data.x.shape
+    data.index = data.x[:, 0]
+    data.y = data.x[:, (ncols - target_length):].type(torch.float)
+    data.x = data.x[:, 1:(ncols - target_length)].type(torch.float)
+    
+    if os.path.exists(f"data/pyg/{dataset_name}"):
+        shutil.rmtree(f"data/pyg/{dataset_name}")
+    dataset = GraphRelationalDataset(root=f"data/pyg/{dataset_name}", data_list=[data])
+    dataset.process()
+    return dataset
 
-
-def get_mutagenesis_dataset(root="data/pyg/mutagenesis", features=_MUTAGENESIS_FEATURES_TO_KEEP_GIN, features_length=_MUTAGENESIS_FEATURES_LENGTH, feature_mappings=_MUTAGENESIS_FEATURE_MAPPING_GIN, target=True):
-    
-    G = get_mutagenesis_graph(root_nodes=False, features=features, feature_mappings=feature_mappings)
-    mutagenesis_data_list = [from_networkx(G, group_node_attrs=features)]
-    
-    # we assume that the target is the last feature
-    # from_networkx doesn't support specifying the target so we have to do it manually
-    if target:
-        for data in mutagenesis_data_list:
-            # we assume that the first column is the index (needed for future mappings)
-            data.index = data.x[:, 0]
-            # we assume that the target is located at the last few columns
-            data.y = data.x[:, (features_length + 1):].view(-1, data.x.shape[1] - features_length - 1).type(torch.float)
-            # we assume the features are located in the middle columns
-            data.x = data.x[:, 1:(features_length + 1)].type(torch.float)
-    
-    # TODO: if we already have saved files this will not update them
-    # process() should do it afaik but its not working ...
-    mutagenesis = Mutagenesis(root=root, data_list=mutagenesis_data_list)
-    mutagenesis.process()
-    return mutagenesis
-
-
-def get_mutagenesis_subgraphs_dataset(root="data/pyg_subgraphs/mutagenesis", features=_MUTAGENESIS_FEATURES_TO_KEEP_GIN, features_length=_MUTAGENESIS_FEATURES_LENGTH, feature_mappings=_MUTAGENESIS_FEATURE_MAPPING_GIN, target=True):
-    
-    subgraphs = get_mutagenesis_subgraphs(features=features, feature_mappings=feature_mappings)
-    mutagenesis_data_list = [from_networkx(G, group_node_attrs=features) for G in subgraphs]
-    
-    # we assume that the target is the last feature
-    # from_networkx doesn't support specifying the target so we have to do it manually
-    if target:
-        for data in mutagenesis_data_list:
-            # we assume that the first column is the index (needed for future mappings)
-            data.index = data.x[:, 0]
-            # we assume that the target is located at the last few columns
-            data.y = data.x[:, (features_length + 1):].view(-1, data.x.shape[1] - features_length - 1).type(torch.float)
-            # we assume the features are located in the middle columns
-            data.x = data.x[:, 1:(features_length + 1)].type(torch.float)
-    
-    # TODO: if we already have saved files this will not update them
-    # process() should do it afaik but its not working ...
-    mutagenesis = Mutagenesis(root=root, data_list=mutagenesis_data_list)
-    mutagenesis.process()
-    return mutagenesis
 
 ############################################################################################
 
-def main():
-    pass
+def main():    
+    # whole dataset
+    # rossmann_dataset = create_pyg_dataset("rossmann-store-sales")
+    # mutagenesis_dataset = create_pyg_dataset("mutagenesis")
+    # # sample
+    # rossmann_sample = sample_relational_distribution("rossmann-store-sales", 1000)
+    # mutagenesis_sample = sample_relational_distribution("mutagenesis",  1000)
+    
+    
+    # k-hop vectors (k-hop degrees by type)
+    # whole dataset
+    rossmann_dataset = create_pyg_dataset("rossmann-store-sales", target="k_hop_vectors")
+    mutagenesis_dataset = create_pyg_dataset("mutagenesis", target="k_hop_vectors")
+    # sample
+    rossmann_sample = sample_relational_distribution("rossmann-store-sales", 1000, target="k_hop_vectors")
+    mutagenesis_sample = sample_relational_distribution("mutagenesis",  1000, target="k_hop_vectors")
+
 
 if __name__ == "__main__":
     main()

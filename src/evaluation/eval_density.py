@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 import os 
 
 import json
@@ -7,6 +8,7 @@ import json
 # Metrics
 from sdmetrics.reports.single_table import QualityReport, DiagnosticReport
 
+from src.data.utils import load_tables, load_metadata
 
 import argparse
 
@@ -18,110 +20,79 @@ python src/eval/eval_density.py --dataname [NAME_OF_DATASET] --model tabsyn --pa
 """
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataname', type=str, default='adult')
-parser.add_argument('--model', type=str, default='tabsyn')
+# dataset to evaluate
+parser.add_argument('--dataset', type=str, default='rossmann-store-sales',
+                    help='Specify the dataset to evaluate.')
+
+parser.add_argument('--method', type=str, default='sdv', 
+                    help='Specify the synthetic data generation method to evaluate')
 parser.add_argument('--path', type=str, default = None, help='The file path of the synthetic data')
 
 args = parser.parse_args()
 
-
-def reorder(real_data, syn_data, info):
-    num_col_idx = info['num_col_idx']
-    cat_col_idx = info['cat_col_idx']
-    target_col_idx = info['target_col_idx']
-
-    task_type = info['task_type']
-    if task_type == 'regression':
-        num_col_idx += target_col_idx
-    else:
-        cat_col_idx += target_col_idx
-
-    real_num_data = real_data[num_col_idx]
-    real_cat_data = real_data[cat_col_idx]
-
-    new_real_data = pd.concat([real_num_data, real_cat_data], axis=1)
-    new_real_data.columns = range(len(new_real_data.columns))
-
-    syn_num_data = syn_data[num_col_idx]
-    syn_cat_data = syn_data[cat_col_idx]
-    
-    new_syn_data = pd.concat([syn_num_data, syn_cat_data], axis=1)
-    new_syn_data.columns = range(len(new_syn_data.columns))
-
-    
-    metadata = info['metadata']
-
-    columns = metadata['columns']
-    metadata['columns'] = {}
-
-    inverse_idx_mapping = info['inverse_idx_mapping']
-
-
-    for i in range(len(new_real_data.columns)):
-        if i < len(num_col_idx):
-            metadata['columns'][i] = columns[num_col_idx[i]]
-        else:
-            metadata['columns'][i] = columns[cat_col_idx[i-len(num_col_idx)]]
-    
-
-    return new_real_data, new_syn_data, metadata
-
 if __name__ == '__main__':
 
-    dataname = args.dataname
-    model = args.model
-
-    if not args.path:
-        syn_path = f'synthetic/{dataname}/{model}.csv'
-    else:
-        syn_path = args.path
-
-    real_path = f'synthetic/{dataname}/real.csv'
-
-    data_dir = f'data/{dataname}' 
-    print(syn_path)
-
-    with open(f'{data_dir}/info.json', 'r') as f:
-        info = json.load(f)
-
-    syn_data = pd.read_csv(syn_path)
-    real_data = pd.read_csv(real_path)
-
-    save_dir = f'eval/density/{dataname}/{model}'
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
-
-    real_data.columns = range(len(real_data.columns))
-    syn_data.columns = range(len(syn_data.columns))
-
-    metadata = info['metadata']
-    metadata['columns'] = {int(key): value for key, value in metadata['columns'].items()}
-
-    new_real_data, new_syn_data, metadata = reorder(real_data, syn_data, info)
-
-    qual_report = QualityReport()
-    qual_report.generate(new_real_data, new_syn_data, metadata)
-
-    diag_report = DiagnosticReport()
-    diag_report.generate(new_real_data, new_syn_data, metadata)
-
-    quality =  qual_report.get_properties()
-    diag = diag_report.get_properties()
-
-    Shape = quality['Score'][0]
-    Trend = quality['Score'][1]
-
-    with open(f'{save_dir}/quality.txt', 'w') as f:
-        f.write(f'{Shape}\n')
-        f.write(f'{Trend}\n')
-
-    Quality = (Shape + Trend) / 2
-
-    shapes = qual_report.get_details(property_name='Column Shapes')
-    trends = qual_report.get_details(property_name='Column Pair Trends')
-    coverages = diag_report.get_details('Coverage')
+    tables_synthetic = load_tables(args.dataset, data_type=f'synthetic/{args.method}')
+    tables_original = load_tables(args.dataset, split='train')
 
 
-    shapes.to_csv(f'{save_dir}/shape.csv')
-    trends.to_csv(f'{save_dir}/trend.csv')
-    coverages.to_csv(f'{save_dir}/coverage.csv')
+    tables_synthetic = load_tables(args.dataset, data_type=f'synthetic/{args.method}')
+    tables_original = load_tables(args.dataset, split='train')
+
+    metadata = load_metadata(args.dataset)
+
+    for table in tables_original.keys():
+
+        save_dir = f'eval/density/{args.method}/{args.dataset}/{table}'
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+
+        table_metadata = metadata.to_dict()['tables'][table]
+        syn_data = tables_synthetic[table]
+        real_data = tables_original[table]
+
+        for column in real_data.columns:
+            synth_col = syn_data[column]
+            orig_col = real_data[column] 
+            if table_metadata['fields'][column]['type'] == 'categorical':
+                synth_col = synth_col.fillna('nan')
+                orig_col = orig_col.fillna('nan')
+            elif table_metadata['fields'][column]['type'] == 'numerical':
+                synth_col = synth_col.fillna(0)
+                orig_col = orig_col.fillna(0)
+            elif table_metadata['fields'][column]['type'] == 'id':
+                continue
+            plt.clf()
+            _, bins, _ = plt.hist(orig_col, density=True, stacked=True, bins='fd',label='Original')
+            plt.hist(synth_col, alpha=0.5, bins=bins, density=True, stacked=True, label='Synthetic')
+            plt.legend()
+            plt.savefig(f'{save_dir}/{column}.png')
+
+        
+
+        qual_report = QualityReport()
+        qual_report.generate(real_data, syn_data, table_metadata)
+
+        diag_report = DiagnosticReport()
+        diag_report.generate(real_data, syn_data, table_metadata)
+
+        quality =  qual_report.get_properties()
+        diag = diag_report.get_properties()
+
+        Shape = quality['Score'][0]
+        Trend = quality['Score'][1]
+
+        with open(f'{save_dir}/quality.txt', 'w') as f:
+            f.write(f'{Shape}\n')
+            f.write(f'{Trend}\n')
+
+        Quality = (Shape + Trend) / 2
+
+        shapes = qual_report.get_details(property_name='Column Shapes')
+        trends = qual_report.get_details(property_name='Column Pair Trends')
+        coverages = diag_report.get_details('Coverage')
+
+
+        shapes.to_csv(f'{save_dir}/shape.csv')
+        trends.to_csv(f'{save_dir}/trend.csv')
+        coverages.to_csv(f'{save_dir}/coverage.csv')

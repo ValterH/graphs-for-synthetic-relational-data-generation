@@ -1,6 +1,9 @@
 import os
+import warnings
 
 import pandas as pd
+# there is a pesky FutureWarning inside a sdv dependency
+warnings.simplefilter(action='ignore', category=FutureWarning)
 from sdv import Metadata
 
 ROOT_DIR = 'graphs-for-synthetic-relational-data-generation'
@@ -69,8 +72,9 @@ def save_tables(tables, dataset_name, split=None, data_type='original'):
 
 
 def load_tables(dataset_name, data_type='original', split=None):
+    root_dir = os.getcwd().split(ROOT_DIR)[0] + ROOT_DIR
     tables = {}
-    data_path = f'data/{data_type}/{dataset_name}'
+    data_path = os.path.join(root_dir, 'data', data_type, dataset_name)
     for file_name in os.listdir(data_path):
         if not file_name.endswith('.csv'):
             continue

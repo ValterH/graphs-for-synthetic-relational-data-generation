@@ -1,32 +1,60 @@
 import os
-import pathlib
-import json
-import pandas as pd
+
 import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.decomposition import PCA
+import pandas as pd
+from tqdm import tqdm
+
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
-from torch_geometric.utils import from_networkx, get_embeddings
-
-
-# pyg implemenation of GIN (need to specify the model architecture when instantiating)
 from torch_geometric.nn.models import GIN
-# custom GIN with 2 layers
-from src.embedding_generation.GINModel import GINModel
-from src.data_modelling.pyg_datasets import (
-    get_rossmann_dataset,
-    get_rossmann_subgraphs_dataset,
-    get_mutagenesis_dataset,
-    get_mutagenesis_subgraphs_dataset
-)
+from torch_geometric.utils import get_embeddings
+
+from src.data.utils import load_metadata
+from src.data_modelling.pyg_datasets import create_pyg_dataset
 
 ############################################################################################
 
-# train with a single graph represented in a Data object
-def train(model, data, optimizer, loss_func, epochs=100):
-    for epoch in range(epochs):
+GIN_DEFAULTS = {
+    # model params
+    "hidden_channels": 32,
+    "jk": "last",
+    "norm": "batch",
+    
+    # optimizer params
+    "lr": 0.01,
+    
+    # training params
+    "epochs": 250,
+
+    # data params
+    "target": "k_hop_vectors",
+}
+
+
+############################################################################################
+
+def train_gin(dataset_name, model_save_path, target=None, hidden_channels=32, jk="last", norm="batch", lr=0.01, epochs=250, seed=42):
+    if target is None:
+        target = GIN_DEFAULTS["target"]
+    torch.manual_seed(seed)
+    
+    
+    metadata = load_metadata(dataset_name)
+    dataset = create_pyg_dataset(dataset_name, target=target)
+    # our dataset contains only a single graph (union of disjoint graphs) representing the entire database
+    data = dataset[0] 
+    
+    # model
+    feature_dim = data.x.shape[1]
+    num_tables = len(metadata.get_tables())
+    target_dim = data.y.shape[1]
+    model = GIN(in_channels=feature_dim, hidden_channels=hidden_channels, num_layers=(num_tables - 1), out_channels=target_dim, jk=jk, norm=norm)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
+    loss_func = nn.MSELoss()
+    
+    # training
+    pbar = tqdm(range(epochs))
+    for epoch in pbar:
         model.train()
         optimizer.zero_grad()
         out = model(data.x, data.edge_index)
@@ -34,31 +62,11 @@ def train(model, data, optimizer, loss_func, epochs=100):
         loss.backward()
         optimizer.step()
         
-        if epoch % 10 == 0:
-            print(f"Epoch {f'{epoch},':<4} Loss: {loss.item() :.5f}")
-
-
-# TODO: should we train in batches with multiple disjoint graphs?
-# train over a dataset with multiple graphs
-# def train_batched(model, dataset, optimizer, loss_func, epochs=100, batch_size=32):
-#     data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+        pbar.set_description(f"Training {dataset_name} GIN model (Epoch: {epoch} | Loss: {loss.item():.4f})")
     
-#     for epoch in range(epochs):
-#         model.train()
-#         for batch in data_loader:
-#             optimizer.zero_grad()
-#             out = model(batch.x, batch.edge_index)
-#             loss = loss_func(out, batch.y)
-#             loss.backward()
-#             optimizer.step()
-        
-#         if epoch % 10 == 0:
-#             print(f"Epoch {epoch}, Loss: {loss.item()}")
-
-
-# TODO: evaluate the model if we decide to evaluate separate stages
-# def test():
-#     pass
+    # save model
+    os.makedirs(model_save_path, exist_ok=True)
+    torch.save(model.state_dict(), model_save_path + "model.pt")
 
 
 def get_gin_embeddings(model, data):
@@ -72,143 +80,73 @@ def get_gin_embeddings(model, data):
 ############################################################################################
 
 
-def get_rossmann_embeddings(model_save_path = "models/gin_embeddings/rossmann-store-sales/", data_save_path="data/gin_embeddings/rossmann-store-sales/"):
-    
-    # data
-    rossmann_dataset = get_rossmann_dataset()
-    data = rossmann_dataset[0]
-    
-    # model
-    # model = GINModel(num_features=1)
-    model = GIN(in_channels=1, hidden_channels=32, num_layers=1, out_channels=1, jk="last")
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-    loss_func = nn.MSELoss()
-    epochs = 200
-    
-    # training
-    train(model, data, optimizer, loss_func, epochs=epochs)
-    # save model
-    os.makedirs(model_save_path, exist_ok=True)
-    torch.save(model.state_dict(), model_save_path + "model.pt")
-    
-    # get embeddings
-    last_layer_embeddings = get_gin_embeddings(model, data)
-
-    # write generated embeddings to a dataframe
-    stores_mask, sales_mask = data.x[:, 0] == 0, data.x[:, 0] == 1
-    stores_embeddings_df = pd.DataFrame(last_layer_embeddings[stores_mask].numpy(), index=data.index[stores_mask].numpy()).sort_index()
-    sales_embeddings_df = pd.DataFrame(last_layer_embeddings[sales_mask].numpy(), index=data.index[sales_mask].numpy()).sort_index()
-    
-    os.makedirs(data_save_path, exist_ok=True)
-    stores_embeddings_df.to_csv(data_save_path + "store_embeddings.csv", index=False)
-    sales_embeddings_df.to_csv(data_save_path + "test_embeddings.csv", index=False)
-
-
-def get_mutagenesis_embeddings(model_save_path = "models/gin_embeddings/mutagenesis/", data_save_path="data/gin_embeddings/mutagenesis/"):
-    
-    # data
-    mutagenesis_dataset = get_mutagenesis_dataset()
-    data = mutagenesis_dataset[0]
-    
-    # model
-    # model = GINModel(num_features=1)
-    model = GIN(in_channels=1, hidden_channels=32, num_layers=2, out_channels=1, jk="last")
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-    loss_func = nn.MSELoss()
-    epochs = 200
-    
-    # training
-    train(model, data, optimizer, loss_func, epochs=epochs)
-    # save model
-    os.makedirs(model_save_path, exist_ok=True)
-    torch.save(model.state_dict(), model_save_path + "model.pt")
-    
-    # get embeddings
-    last_layer_embeddings = get_gin_embeddings(model, data)
-
-    # write generated embeddings to a dataframe
-    molecule_mask, atom_mask, bond_mask = data.x[:, 0] == 0, data.x[:, 0] == 1, data.x[:, 0] == 2
-    molecule_embeddings_df = pd.DataFrame(last_layer_embeddings[molecule_mask].numpy(), index=data.index[molecule_mask].numpy()).sort_index()
-    atom_embeddings_df = pd.DataFrame(last_layer_embeddings[atom_mask].numpy(), index=data.index[atom_mask].numpy()).sort_index()
-    bond_embeddings_df = pd.DataFrame(last_layer_embeddings[bond_mask].numpy(), index=data.index[bond_mask].numpy()).sort_index()
-    
-    os.makedirs(data_save_path, exist_ok=True)
-    molecule_embeddings_df.to_csv(data_save_path + "molecule_embeddings.csv")
-    atom_embeddings_df.to_csv(data_save_path + "atom_embeddings.csv")
-    bond_embeddings_df.to_csv(data_save_path + "bond_embeddings.csv")
-
-
-def generate_embeddings(dataset, metadata, table_mapping, model_save_path, data_save_path, in_channels=1, hidden_channels=32, num_layers=1, out_channels=1, jk="last"):
+def generate_embeddings(dataset, metadata, model_path, data_save_path, hidden_channels=32, jk="last", norm="batch"):
     # data
     data = dataset[0]
     
     # model
-    # model = GINModel(num_features=1)
-    model = GIN(in_channels=in_channels, hidden_channels=hidden_channels, num_layers=num_layers, out_channels=out_channels, jk=jk)
-    # load model
-    model.load_state_dict(torch.load(model_save_path + "model.pt"))
+    feature_dim = data.x.shape[1]
+    num_tables = len(metadata.get_tables())
+    target_dim = data.y.shape[1]
+    model = GIN(in_channels=feature_dim, hidden_channels=hidden_channels, num_layers=(num_tables - 1), out_channels=target_dim, jk=jk, norm=norm)
+    # load trained model
+    model.load_state_dict(torch.load(model_path + "model.pt"))
     
     # get embeddings
     last_layer_embeddings = get_gin_embeddings(model, data)
 
+    table_mapping = {table_name: table_id for table_id, table_name in enumerate(metadata.get_tables())}
     # write generated embeddings to a dataframe
     for table_name, table_id in table_mapping.items():
-        table_mask = data.x[:, 0] == table_id
+        # select the embeddings for this table
+        table_mask = (data.x[:, 0] == table_id)
         node_ids = data.index[table_mask]
         table_embeddings_df = pd.DataFrame(last_layer_embeddings[table_mask].numpy(), index=node_ids.numpy()).sort_index()
+        
         os.makedirs(data_save_path, exist_ok=True)
         table_embeddings_df.to_csv(data_save_path + f"{table_name}_embeddings.csv")
+        
         for parent in metadata.get_parents(table_name):
-            for fk in metadata.get_foreign_keys(parent, table_name):
+            for i, fk in enumerate(metadata.get_foreign_keys(parent, table_name)):
+                
                 pyg_ids = np.where(table_mask)[0]
-                # TODO: this works only for rossmann we should add edge types to graphs
+                parent_pyg_ids = np.where(data.x[:, 0] == table_mapping[parent])[0]
+
                 edge_index = pd.DataFrame(data.edge_index.T, columns=['source', 'target'])
-                fks = pd.DataFrame(data.index[edge_index[edge_index['target'].isin(pyg_ids)]['source'].values], columns=['parent'])
+                
+                # select only edges that contain this table's nodes as targets 
+                # (currently we have this stored as undirected graph in the edge index so this is not the case)
+                edge_index = edge_index[edge_index['target'].isin(pyg_ids)]
+                edge_index = edge_index[edge_index['source'].isin(parent_pyg_ids)]
+                
+                # select the ith edge for each parent node (eg. atom1_id , atom2_id)
+                edge_index = edge_index[edge_index.groupby("target").cumcount() == i]
+                
+                # parent = parent node id
+                fks = pd.DataFrame(data.index[edge_index['source'].values], columns=['parent'])
+                
                 fks.index = node_ids.numpy()
+                # id = child node id
                 fks['id'] = node_ids.numpy()
                 fks.sort_index(inplace=True)
                 fks.to_csv(data_save_path + f"{table_name}_{fk}_fks.csv", index=False)
 
 
-        
-############################################################################################
-
-
-# # Convert embeddings to a numpy array
-# embeddings_array = last_layer_embeddings.cpu().numpy()
-
-# # Perform PCA
-# pca = PCA(n_components=2)  # You can adjust the number of components as needed
-# embeddings_pca = pca.fit_transform(embeddings_array)
-
-# # Visualization
-# plt.figure(figsize=(8, 6))
-
-# pca_0_x, pca_0_y = embeddings_pca[data.x[:, 0] == 0, 0], embeddings_pca[data.x[:, 0] == 0, 1]
-# pca_1_x, pca_1_y = embeddings_pca[data.x[:, 0] == 1, 0], embeddings_pca[data.x[:, 0] == 1, 1]
-# pca_2_x, pca_2_y = embeddings_pca[data.x[:, 0] == 2, 0], embeddings_pca[data.x[:, 0] == 2, 1]
-
-# plt.scatter(pca_0_x, pca_0_y, alpha=0.5, label="Molecule", color="red")
-# plt.scatter(pca_1_x, pca_1_y, alpha=0.5, label="Atom", color="blue")
-# plt.scatter(pca_2_x, pca_2_y, alpha=0.5, label="Bond", color="green")
-
-# # plt.scatter(embeddings_pca[:, 0], embeddings_pca[:, 1], alpha=0.5)
-# plt.title('PCA Visualization of Embeddings')
-# plt.xlabel('Principal Component 1')
-# plt.ylabel('Principal Component 2')
-# plt.show()
-
 ############################################################################################
 
 
 def main():
-    # Set a seed for PyTorch
-    SEED = 42  # Replace 42 with the desired seed value
-    torch.manual_seed(SEED)
-    rossmann_embeddings = get_rossmann_embeddings()
-    mutagenesis_embeddings = get_mutagenesis_embeddings()
+    train_gin("rossmann-store-sales", "models/gin_embeddings/rossmann-store-sales/", target="k_hop_degrees")
+    train_gin("mutagenesis", "models/gin_embeddings/mutagenesis/", target="k_hop_vectors")
     
-    pass
+    # original dataset embeddings
+    generate_embeddings(create_pyg_dataset("rossmann-store-sales", target="k_hop_degrees"), load_metadata("rossmann-store-sales"), "models/gin_embeddings/rossmann-store-sales/", "data/gin_embeddings/rossmann-store-sales/")
+    generate_embeddings(create_pyg_dataset("mutagenesis", target="k_hop_vectors"), load_metadata("mutagenesis"), "models/gin_embeddings/mutagenesis/", "data/gin_embeddings/mutagenesis/")
+    
+    # sampled dataset embeddings
+    from src.data_modelling.pyg_datasets import sample_relational_distribution
+    generate_embeddings(sample_relational_distribution("rossmann-store-sales", 200, target="k_hop_degrees"), load_metadata("rossmann-store-sales"), "models/gin_embeddings/rossmann-store-sales/", "data/gin_embeddings/rossmann-store-sales/generated/")
+    generate_embeddings(sample_relational_distribution("mutagenesis", 200, target="k_hop_degrees"), load_metadata("mutagenesis"), "models/gin_embeddings/mutagenesis/", "data/gin_embeddings/mutagenesis/generated/")
 
 
 if __name__ == "__main__":

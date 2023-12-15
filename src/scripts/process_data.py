@@ -19,3 +19,11 @@ df = pd.read_csv('data/rossmann-store-sales/original/test.csv')
 column_order = ['Date', 'DayOfWeek', 'Open', 'Promo', 'StateHoliday', 'SchoolHoliday', 'Store', 'Id']
 df = df.reindex(columns=column_order)
 df.to_csv('data/rossmann-store-sales/test.csv', index=False)
+
+
+# Postprocess Mostly.ai data
+df = pd.read_csv('data/synthetic/mostlyai/rossmann-store-sales/test.csv')
+df = df[df['Open'] != '_RARE_']
+
+print(df['Store'].unique().shape)
+df.to_csv('data/synthetic/mostlyai/rossmann-store-sales/test.csv', index=False)

@@ -106,7 +106,6 @@ def sample_diff(dataname, run, is_cond=True, cond='linear', device='cuda:0', num
     if is_cond:
         cond_embedding_save_path = f'ckpt/{dataname}/{run}/gen/cond_z.npy'
         train_z_cond = torch.tensor(np.load(cond_embedding_save_path)).float()
-        # TODO: this used to be train_z = train_z[:, 1:, :] <- the authors do not use the first token
         B, in_dim_cond = train_z_cond.size()
         train_z_cond = train_z_cond.view(B, in_dim_cond).to(device)
         num_samples = B

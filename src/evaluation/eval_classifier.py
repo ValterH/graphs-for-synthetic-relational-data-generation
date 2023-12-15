@@ -128,6 +128,10 @@ def discriminative_detection(original, synthetic, clf=LogisticRegression(solver=
     transformed_original = transformed_original.reindex(column_names, axis=1)
     transformed_synthetic = transformed_synthetic.reindex(column_names, axis=1)
 
+    n = min(max_items, transformed_original.shape[0], transformed_synthetic.shape[0])
+    transformed_original = transformed_original.sample(n=n, random_state=42, replace=False)
+    transformed_synthetic = transformed_synthetic.sample(n=n, random_state=42, replace=False)
+
     
     if 'Date' in column_names:
         transformed_original['Date'] = pd.to_numeric(pd.to_datetime(transformed_original['Date']))
@@ -143,43 +147,54 @@ def discriminative_detection(original, synthetic, clf=LogisticRegression(solver=
     ])
     X = pd.concat([transformed_original, transformed_synthetic], axis=0)
 
-    # TODO: we can do cross validation here
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, shuffle=True, stratify=y)
-
-
     ht = CustomHyperTransformer()
-    X_train = ht.fit_transform(X_train)
-    X_test = ht.transform(X_test)
+    X = ht.fit_transform(X)
 
     model = Pipeline([
         ('scaler', StandardScaler()),
         ('clf', clf)
     ])
 
-    model.fit(X_train, y_train)
-    probs = model.predict_proba(X_test)
-    y_pred = probs.argmax(axis=1)
 
-    feature_importances = list(zip(X_train.columns, model['clf'].feature_importances_))
-    feature_importances.sort(key=lambda x: x[1], reverse=True)
-    for feature, importance in feature_importances:
-        print(f'{feature :<12}: {importance:.3}')
+    def cross_validation(model, X, y, cv=5):
+        folds = np.random.randint(0, cv, size=X.shape[0])
+        scores = {
+            'zero_one': [],
+            'log_loss': [],
+        }
+        for i in range(cv):
+            model.fit(X[folds != i], y[folds != i])
+            probs = model.predict_proba(X[folds == i])
+            preds = probs.argmax(axis=1)
+            scores['zero_one'].append((preds == y[folds == i]).astype(int))
+            scores['log_loss'].append(log_loss(y[folds == i], probs))
+        scores['zero_one'] = np.hstack(scores['zero_one']).tolist()
+        scores['log_loss'] = np.hstack(scores['log_loss'])
+        return scores
 
-    results = {
-        'zero_one': (y_test == y_pred).astype(int).tolist(),
-        'log_loss': log_loss(y_test, probs),
-        'accuracy': accuracy_score(y_test, y_pred)
-    }
+    
+    scores = cross_validation(model, X, y, cv=5)
 
-    return results
+    # # Feature importance
+    # X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, shuffle=True, stratify=y)
+
+    # ht = CustomHyperTransformer()
+    # X_train = ht.fit_transform(X_train)
+    # X_test = ht.transform(X_test)
+    # model.fit(X_train, y_train)
+
+    # feature_importances = list(zip(X_train.columns, model['clf'].feature_importances_))
+    # feature_importances.sort(key=lambda x: x[1], reverse=True)
+    # for feature, importance in feature_importances:
+    #     print(f'{feature :<12}: {importance:.3}')
+
+    return scores
 
 
 def parent_child_discriminative_detection(original, synthetic, clf=LogisticRegression(solver='lbfgs', max_iter=100), 
                                           max_items = 100000, **kwargs):
     metadata = kwargs.get('metadata', None)
     root_table = kwargs.get('root_table', None)
-    print(root_table)
-    print(metadata)
 
     # join parent and child tables based on the metadata
     original = merge_children(original, metadata, root_table)
@@ -228,6 +243,7 @@ if __name__ == "__main__":
     metadata = load_metadata(args.dataset)
     root_table = get_root_table(args.dataset)
 
+    print('multi-table')
     pc_results = parent_child_discriminative_detection(tables_original, tables_synthetic, 
                                                        clf=clf, metadata=metadata, root_table=root_table)
     
@@ -235,6 +251,7 @@ if __name__ == "__main__":
     for table in tables_original.keys():
         original = drop_ids(tables_original[table].copy(), table, metadata)
         synthetic = drop_ids(tables_synthetic[table].copy(), table, metadata)
+        print(table)
         results[table] = discriminative_detection(original, synthetic, clf=clf)['zero_one']
     
     for key, value in results.items():
