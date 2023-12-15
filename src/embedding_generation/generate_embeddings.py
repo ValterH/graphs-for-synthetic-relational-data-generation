@@ -27,7 +27,7 @@ GIN_DEFAULTS = {
     "epochs": 250,
 
     # data params
-    "target": "k_hop_neighbors",
+    "target": "k_hop_vectors",
 }
 
 
@@ -137,11 +137,11 @@ def generate_embeddings(dataset, metadata, model_path, data_save_path, hidden_ch
 
 def main():
     train_gin("rossmann-store-sales", "models/gin_embeddings/rossmann-store-sales/", target="k_hop_degrees")
-    train_gin("mutagenesis", "models/gin_embeddings/mutagenesis/", target="k_hop_degrees")
+    train_gin("mutagenesis", "models/gin_embeddings/mutagenesis/", target="k_hop_vectors")
     
     # original dataset embeddings
     generate_embeddings(create_pyg_dataset("rossmann-store-sales", target="k_hop_degrees"), load_metadata("rossmann-store-sales"), "models/gin_embeddings/rossmann-store-sales/", "data/gin_embeddings/rossmann-store-sales/")
-    generate_embeddings(create_pyg_dataset("mutagenesis", target="k_hop_degrees"), load_metadata("mutagenesis"), "models/gin_embeddings/mutagenesis/", "data/gin_embeddings/mutagenesis/")
+    generate_embeddings(create_pyg_dataset("mutagenesis", target="k_hop_vectors"), load_metadata("mutagenesis"), "models/gin_embeddings/mutagenesis/", "data/gin_embeddings/mutagenesis/")
     
     # sampled dataset embeddings
     from src.data_modelling.pyg_datasets import sample_relational_distribution

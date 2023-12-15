@@ -67,7 +67,7 @@ def database_to_graph(database_name, split="train", directed=True):
         
         parent_pk = metadata.get_primary_key(parent_table_name)
         parent_table = tables[parent_table_name].copy()
-        parent_table["type"] = parent_table_name
+        parent_table["node_type"] = parent_table_name
         if parent_table_name in key_mappings:
             parent_id_mapping = key_mappings[parent_table_name]
         else:
@@ -82,7 +82,7 @@ def database_to_graph(database_name, split="train", directed=True):
             
             child_pk = metadata.get_primary_key(child_table_name)
             child_table = tables[child_table_name].copy()        
-            child_table["type"] = child_table_name
+            child_table["node_type"] = child_table_name
             # create a mapping for parent and child ids (the primary keys are not necessarily integers so we remap them to integers)
             if child_table_name in key_mappings:
                 child_id_mapping = key_mappings[child_table_name]

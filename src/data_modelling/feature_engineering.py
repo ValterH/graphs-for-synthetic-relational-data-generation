@@ -11,13 +11,7 @@ def all_nodes_k_hop_vectors(G, k, node_types, undirected=True):
     
     if undirected:
         G = G.copy().to_undirected()
-    
-    # NOTE: if we get a graph which doesn't contain all of the node types, we will get an incorrect result - so we can't infer the node types from the graph
-    # node_types = nx.get_node_attributes(G, "type")
-    # node_types = {node_type for node_type in node_types.values()}
-    # # convert to list and sort by alphabetical order to ensure consistent ordering
-    # node_types = sorted(list(node_types))
-    
+        
     all_k_hop_vectors_dict = {}
     for node in G.nodes():
         all_k_hop_vectors_dict[node] = k_hop_vectors(G, node, k, node_types)
@@ -27,14 +21,14 @@ def all_nodes_k_hop_vectors(G, k, node_types, undirected=True):
 
 def k_hop_vectors(G, node, k, node_types):
     
-    k_hop_neighbors_distance = nx.single_source_shortest_path_length(G, node, cutoff=k)
-    k_hop_neighbour_types = np.array([G.nodes(data=True)[node]["type"] for node in list(k_hop_neighbors_distance.keys())])
+    k_hop_vectors_distance = nx.single_source_shortest_path_length(G, node, cutoff=k)
+    k_hop_neighbour_types = np.array([G.nodes(data=True)[node]["node_type"] for node in list(k_hop_vectors_distance.keys())])
     
     k_hop_vector = []
     for node_type in node_types:
         
         mask = (k_hop_neighbour_types == node_type)
-        distances_masked = np.array(list(k_hop_neighbors_distance.values()))[mask]
+        distances_masked = np.array(list(k_hop_vectors_distance.values()))[mask]
         k_hop_vector_type = [np.count_nonzero(distances_masked == i) for i in range(1, k + 1)]
         
         k_hop_vector.extend(k_hop_vector_type)
@@ -79,8 +73,8 @@ def k_hop_degrees(G, node, k):
         list: The k-hop degrees of the node.
     """
     
-    k_hop_neighbors = nx.single_source_shortest_path_length(G, node, cutoff=k)
-    k_hop_degrees = [list(k_hop_neighbors.values()).count(i) for i in range(1, k + 1)]
+    k_hop_vectors = nx.single_source_shortest_path_length(G, node, cutoff=k)
+    k_hop_degrees = [list(k_hop_vectors.values()).count(i) for i in range(1, k + 1)]
     return k_hop_degrees
 
 
@@ -139,13 +133,13 @@ def main():
     G_rossmann = add_index(G_rossmann)
     G_rossmann = add_k_hop_degrees(G_rossmann, k=2)
     G_rossmann = add_k_hop_vectors(G_rossmann, k=2, node_types=["store", "test"])
-    G_rossmann = filter_graph_features_with_mapping(G_rossmann, ["index", "type", "k_hop_degrees", "k_hop_vectors"], {"type": {"store": 0, "sale": 1}})
+    G_rossmann = filter_graph_features_with_mapping(G_rossmann, ["index", "node_type", "k_hop_degrees", "k_hop_vectors"], {"node_type": {"store": 0, "sale": 1}})
     
     G_mutagenesis, _ = database_to_graph("mutagenesis")
     G_mutagenesis = add_index(G_mutagenesis)
     G_mutagenesis = add_k_hop_degrees(G_mutagenesis, k=2)
     G_mutagenesis = add_k_hop_vectors(G_mutagenesis, k=2, node_types=["molecule", "atom", "bond"])
-    G_mutagenesis = filter_graph_features_with_mapping(G_mutagenesis, ["index", "type", "k_hop_degrees", "k_hop_vectors"], {"type": {"molecule": 0, "atom": 1, "bond": 2}})
+    G_mutagenesis = filter_graph_features_with_mapping(G_mutagenesis, ["index", "node_type", "k_hop_degrees", "k_hop_vectors"], {"node_type": {"molecule": 0, "atom": 1, "bond": 2}})
 
 
 if __name__ == "__main__":

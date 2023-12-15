@@ -14,13 +14,13 @@ from src.data_modelling.feature_engineering import add_index, add_k_hop_degrees,
 ############################################################################################
 DEFAULTS = {
     "rossmann-store-sales": {
-        "features": ["type"],
-        "feature_mappings": {"type": {"store": 0, "test": 1}},
+        "features": ["node_type"],
+        "feature_mappings": {"node_type": {"store": 0, "test": 1}},
         "target": "k_hop_degrees"
     },
     "mutagenesis": {
-        "features": ["type"],
-        "feature_mappings": {"type": {"molecule": 0, "atom": 1, "bond": 2}},
+        "features": ["node_type"],
+        "feature_mappings": {"node_type": {"molecule": 0, "atom": 1, "bond": 2}},
         "target": "k_hop_degrees"
     },
 }

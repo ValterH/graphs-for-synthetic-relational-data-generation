@@ -54,9 +54,7 @@ def compute_loss(X_num, X_cat, Recon_X_num, Recon_X_cat, mu_z, logvar_z):
     return mse_loss, ce_loss, loss_kld, acc
 
 
-def train_vae(X_num, X_cat, categories, d_numerical, info,  epochs=4000, lambd=0.7, max_beta = 0.01, min_beta=1e-5,  device='cuda:0'):
-    ckpt_dir = f'ckpt/{info["name"]}/vae' 
-
+def train_vae(X_num, X_cat, categories, d_numerical,  ckpt_dir, epochs=4000, lambd=0.7, max_beta = 0.01, min_beta=1e-5,  device='cuda:0'):
     if not os.path.exists(ckpt_dir):
         os.makedirs(ckpt_dir)
 
