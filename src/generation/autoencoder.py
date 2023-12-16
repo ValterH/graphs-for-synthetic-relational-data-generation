@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 import tabsyn_utils as src
 from vae.model import Model_VAE, Encoder_model, Decoder_model
-from utils_train import preprocess, TabularDataset
+from utils_train import preprocess, TabularDataset, get_dummy_numerical_features
 
 warnings.filterwarnings('ignore')
 
@@ -125,6 +125,10 @@ def train_vae(X_num, X_cat, categories, d_numerical,  ckpt_dir, epochs=4000, lam
         
             loss_mse, loss_ce, loss_kld, train_acc = compute_loss(batch_num, batch_cat, Recon_X_num, Recon_X_cat, mu_z, std_z)
 
+            # TODO: SUPPORT NO NUMERICAL FEATURES
+            # if X_num.shape[1] == 0:
+            #     loss = loss_ce + beta * loss_kld
+            # else:
             loss = loss_mse + loss_ce + beta * loss_kld
             loss.backward()
             optimizer.step()
@@ -218,18 +222,21 @@ def create_latent_embeddings(df, dataname, device = 'cuda'):
     # replace nan categorical values with a string 'nan
     df_cat = df[cat_columns]
 
+
     df_cat.fillna('nan', inplace=True)
 
     # ensure the data is encoded in the sam way as the training data
     X_num_t, X_cat_t, y_t = src.read_pure_data(data_dir, 'train')
 
     X_num = df[num_columns].to_numpy().astype(np.float32)
-    X_cat = df_cat.to_numpy()
+    X_cat = df_cat.astype('str').to_numpy()
 
     # original data is in the train split
     # the data to encode is in the test split
     assert X_cat_t.shape[1] == X_cat.shape[1]
     assert X_num_t.shape[1] == X_num.shape[1]
+    assert X_cat.dtype == X_cat_t.dtype
+    assert X_num.dtype == X_num_t.dtype
     
     X_categorical = {'train': X_cat_t, 'test': X_cat}
     X_numerical = {'train': X_num_t, 'test': X_num}
@@ -244,6 +251,15 @@ def create_latent_embeddings(df, dataname, device = 'cuda'):
     T_dict['y_policy'] = "default"
 
     T = src.Transformations(**T_dict)
+
+    # TODO: SUPPORT NO NUMERICAL FEATURES
+    # when there are no numerical features
+    # add a dummy numerical feature from 
+    # the categorical features
+    if X_numerical['train'].shape[1] == 0:
+        x_num_train, x_num_test = get_dummy_numerical_features(X_categorical)
+        X_numerical['train'] = x_num_train.reshape(-1, 1)
+        X_numerical['test'] = x_num_test.reshape(-1, 1)
 
     D = src.Dataset(
         X_numerical,

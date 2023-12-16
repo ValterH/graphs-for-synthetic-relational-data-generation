@@ -93,3 +93,4 @@ target/
 synthetic/
 models/
 ckpt/
+eval/

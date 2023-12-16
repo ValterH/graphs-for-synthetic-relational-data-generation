@@ -1,8 +1,30 @@
-import numpy as np
 import os
+
+import numpy as np
+import pandas as pd
 
 import tabsyn_utils as src
 from torch.utils.data import Dataset
+
+def get_dummy_numerical_features(X_cat):
+    x_train = X_cat['train'][:, -1:]
+    x_test = X_cat['test'][:, -1:]
+    # check if conversion to float is possible
+    if x_train[0][0].replace(".", "").replace('-','').isnumeric():
+        t_train = x_train.astype(float)
+        t_test  = x_test.astype(float)
+    else:
+        import pandas as pd
+        x_train = pd.Series(x_train.reshape(-1))
+        x_test  = pd.Series(x_test.reshape(-1))
+        vc = x_train.value_counts()
+        t_train = x_train.map(lambda y: vc.index.get_loc(y) / x_train.unique().shape[0])
+        t_test  = x_test.map(lambda y: vc.index.get_loc(y) / x_train.unique().shape[0])
+        t_train += np.random.normal(0, np.std(t_train) / 4, t_train.shape[0])
+        t_test  += np.random.normal(0, np.std(t_train) / 4, t_test.shape[0])
+        t_train = t_train.values.reshape(-1, 1)
+        t_test  = t_test.values.reshape(-1, 1)
+    return t_train, t_test
 
 
 class TabularDataset(Dataset):
@@ -130,6 +152,14 @@ def make_dataset(
 
     info = src.load_json(os.path.join(data_path, 'info.json'))
 
+    # TODO: SUPPORT NO NUMERICAL FEATURES
+    # when there are no numerical features
+    # add a dummy numerical feature from 
+    # the categorical features
+    if X_num['train'].shape[1] == 0:
+        x_num_train, x_num_test = get_dummy_numerical_features(X_cat)
+        X_num['train'] = x_num_train.reshape(-1, 1)
+        X_num['test'] = x_num_test.reshape(-1, 1)
     D = src.Dataset(
         X_num,
         X_cat,

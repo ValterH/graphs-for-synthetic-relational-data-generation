@@ -21,6 +21,13 @@ def tables_to_graph(edge_index, source, target, source_attrs_df=None, target_att
     if (target_attrs_df is not None) and (not target_attrs_df.empty):
         target_attrs_df = target_attrs_df.set_index(target)
         G.add_nodes_from(target_attrs_df.to_dict('index').items())
+
+    edge_types = {}
+    for _, row in edge_index.iterrows():
+        edge_types[(row[source], row[target])] = row['edge_type']
+        
+
+    nx.set_edge_attributes(G, edge_types, name='edge_type')
     
     return G
 
@@ -104,6 +111,7 @@ def database_to_graph(database_name, split="train", directed=True):
                 edge_index = pd.DataFrame()
                 edge_index[parent_pk] = child_table[foreign_key]
                 edge_index[child_pk] = child_table[child_pk]
+                edge_index["edge_type"] = foreign_key
                 
                 # TODO: add features optionally and directed/undirected optionally
                 H = tables_to_graph(edge_index, source=parent_pk, target=child_pk, source_attrs_df=parent_table, target_attrs_df=child_table)

@@ -96,9 +96,9 @@ class FourierEmbedding(torch.nn.Module):
 
 
 class CrossAttention(nn.Module):
-    def __init__(self, embed_dim = 512, kdim = 32, vdim=32, *args, **kwargs) -> None:
+    def __init__(self, embed_dim = 512, kdim = 32, vdim=32, num_heads=2, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.multihead_attn = nn.MultiheadAttention(embed_dim, 2, kdim=kdim, vdim=vdim)
+        self.multihead_attn = nn.MultiheadAttention(embed_dim, num_heads, kdim=kdim, vdim=vdim)
 
     def forward(self, x, z_cond):
         attn, _ = self.multihead_attn(x, z_cond, z_cond)
@@ -113,21 +113,25 @@ class MLPDiffusion(nn.Module):
         self.d_in = d_in
         self.cond = cond
 
-        self.proj = nn.Linear(d_in, dim_t)
         if is_cond:
+            self.proj = nn.Linear(d_in * 2, dim_t)
             if self.cond == 'crossattn':
-                self.conditioning = CrossAttention(dim_t, kdim=d_in_cond, vdim=d_in_cond)
+                self.proj = nn.Linear(d_in, dim_t)
+                self.conditioning = CrossAttention(dim_t, kdim=d_in_cond, vdim=d_in_cond, num_heads=4)
+                self.layernorm = nn.LayerNorm(dim_t)
             elif self.cond == 'linear':
-                self.conditioning = nn.Linear(d_in_cond, dim_t)
+                self.conditioning = nn.Linear(d_in_cond, d_in)
             elif self.cond == 'mlp':
                 self.conditioning = nn.Sequential(
-                    nn.Linear(d_in_cond, dim_t * 2),
+                    nn.Linear(d_in_cond, dim_t),
                     nn.SiLU(),
-                    # nn.Linear(dim_t * 2, dim_t * 2),
+                    # nn.Linear(dim_t, dim_t),
                     # nn.SiLU(),
-                    nn.Linear(dim_t * 2, dim_t),
+                    nn.Linear(dim_t, d_in),
                 )
-            self.SiLU = nn.SiLU()
+            #self.SiLU = nn.SiLU()
+        else:
+            self.proj = nn.Linear(d_in, dim_t)
 
         self.mlp = nn.Sequential(
             nn.Linear(dim_t, dim_t * 2),
@@ -152,14 +156,21 @@ class MLPDiffusion(nn.Module):
         emb = self.time_embed(emb) 
         if self.is_cond:
             if self.cond == 'crossattn':
-                x = self.proj(x) 
-                x = x + self.conditioning(x, z_cond)
+                x = self.proj(x)
+                cond = self.conditioning(x, z_cond)
+                x = x + cond
+                x = self.layernorm(x)
             elif self.cond == 'linear':
-                x =  self.proj(x) + self.SiLU(self.conditioning(z_cond))
+                cond = self.conditioning(z_cond)
+                x = torch.cat([x, cond], dim=-1)
+                x = self.proj(x)
             elif self.cond == 'mlp':
-                x = self.proj(x) + self.SiLU(self.conditioning(z_cond))
+                cond = self.conditioning(z_cond)
+                x = torch.cat([x, cond], dim=-1)
+                x = self.proj(x)
             else:
                 raise ValueError(f'Conditioning {self.cond} not supported')
+                    
         else:
             x = self.proj(x)
         x = x + emb

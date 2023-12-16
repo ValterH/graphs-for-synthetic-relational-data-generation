@@ -139,14 +139,20 @@ def main():
     train_gin("rossmann-store-sales", "models/gin_embeddings/rossmann-store-sales/", target="k_hop_degrees")
     train_gin("mutagenesis", "models/gin_embeddings/mutagenesis/", target="k_hop_vectors")
     
-    # original dataset embeddings
     generate_embeddings(create_pyg_dataset("rossmann-store-sales", target="k_hop_degrees"), load_metadata("rossmann-store-sales"), "models/gin_embeddings/rossmann-store-sales/", "data/gin_embeddings/rossmann-store-sales/")
     generate_embeddings(create_pyg_dataset("mutagenesis", target="k_hop_vectors"), load_metadata("mutagenesis"), "models/gin_embeddings/mutagenesis/", "data/gin_embeddings/mutagenesis/")
-    
+
     # sampled dataset embeddings
-    from src.data_modelling.pyg_datasets import sample_relational_distribution
-    generate_embeddings(sample_relational_distribution("rossmann-store-sales", 200, target="k_hop_degrees"), load_metadata("rossmann-store-sales"), "models/gin_embeddings/rossmann-store-sales/", "data/gin_embeddings/rossmann-store-sales/generated/")
-    generate_embeddings(sample_relational_distribution("mutagenesis", 200, target="k_hop_degrees"), load_metadata("mutagenesis"), "models/gin_embeddings/mutagenesis/", "data/gin_embeddings/mutagenesis/generated/")
+    from src.data_modelling.pyg_datasets import sample_relational_distribution, pyg_dataset_from_graph
+
+    G_rossmann = sample_relational_distribution("rossmann-store-sales", 200)
+    dataset_rossmann = pyg_dataset_from_graph(G_rossmann, "rossmann-store-sales", target="k_hop_degrees")
+    generate_embeddings(dataset_rossmann, load_metadata("rossmann-store-sales"), "models/gin_embeddings/rossmann-store-sales/", "data/gin_embeddings/rossmann-store-sales/generated/")
+
+
+    G_mutagenesis = sample_relational_distribution("mutagenesis", 200)
+    dataset_mutagenesis = pyg_dataset_from_graph(G_mutagenesis, "mutagenesis", target="k_hop_vectors")
+    generate_embeddings(dataset_mutagenesis, load_metadata("mutagenesis"), "models/gin_embeddings/mutagenesis/", "data/gin_embeddings/mutagenesis/generated/")
 
 
 if __name__ == "__main__":

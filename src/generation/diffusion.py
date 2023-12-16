@@ -101,7 +101,7 @@ def train_diff(train_z, train_z_cond, ckpt_path, epochs=4000, is_cond=False, con
     print('Time: ', end_time - start_time)
 
 
-def sample_diff(dataname, run, is_cond=True, cond='linear', device='cuda:0', num_samples=None, foreign_keys=None, ids=None):
+def sample_diff(dataname, run, is_cond=True, cond='linear', device='cuda:0', num_samples=None, foreign_keys=None, ids=None, denoising_steps=50):
 
     if is_cond:
         cond_embedding_save_path = f'ckpt/{dataname}/{run}/gen/cond_z.npy'
@@ -136,7 +136,7 @@ def sample_diff(dataname, run, is_cond=True, cond='linear', device='cuda:0', num
 
     sample_dim = in_dim
 
-    x_next = sample(model.denoise_fn_D, num_samples, sample_dim, device=device, z_cond=train_z_cond)
+    x_next = sample(model.denoise_fn_D, num_samples, sample_dim, device=device, z_cond=train_z_cond, num_steps=denoising_steps)
     x_next = x_next * 2 + mean.to(device)
 
     syn_data = x_next.float().cpu().numpy()
@@ -153,6 +153,9 @@ def sample_diff(dataname, run, is_cond=True, cond='linear', device='cuda:0', num
         if datatype == 'date':
             syn_df[col] = pd.to_datetime(syn_df[col].astype('int64')).dt.date
             continue
+        if datatype == 'int' and syn_df[col].dtype == 'object':
+            # parse float from string (model outputs floats)
+            syn_df[col] = syn_df[col].apply(lambda x: float(x))
         syn_df[col] = syn_df[col].astype(datatype)
     syn_df.rename(columns = idx_name_mapping, inplace=True)
     
@@ -161,7 +164,7 @@ def sample_diff(dataname, run, is_cond=True, cond='linear', device='cuda:0', num
         # add to the end of the dataframe
         syn_df.insert(len(syn_df.columns), fk, fk_values)
     # add id column
-    syn_df.insert(info['id_col_idx'], info['id_col_name'], ids) 
+    syn_df.insert(len(syn_df.columns), info['id_col_name'], ids) 
     
     end_time = time.time()
     print('Time:', end_time - start_time)
