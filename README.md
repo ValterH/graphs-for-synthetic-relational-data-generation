@@ -16,6 +16,7 @@ Installation
 Create environment and install requirements
 ```bash
 conda create -n mlg python=3.10
+conda activate mlg
 pip install -r requirements.txt
 ```
 Install PyTorch and PyTorch Geometric dependencies
