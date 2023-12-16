@@ -7,7 +7,6 @@ import torch
 import numpy as np
 import pandas as pd
 import networkx as nx
-from deepsnap.dataset import GraphDataset
 from deepsnap.hetero_graph import HeteroGraph
 
 from src.data.utils import load_metadata, load_tables
