@@ -2,6 +2,28 @@
 -e .
 
 # external requirements
+numpy
+pandas
+scikit-learn
+scipy
+icecream
+xlrd
+tomli-w
+zero
+category_encoders
+imbalanced-learn
+kaggle
+transformers
+datasets
+peft
+ml_collections
+sdmetrics
+prdc
+rdt
+openpyxl
+sdv==0.18.0
+torch_geometric==2.4.0
+deepsnap==0.2.1
 
 
 # backwards compatibility

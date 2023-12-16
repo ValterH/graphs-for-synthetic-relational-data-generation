@@ -11,6 +11,21 @@ their struggle to preserve the relationships between different tables within the
 
 >In this project explicitly model the relationships between tables by leveraging a graph representation of our data.
 
+Installation
+------------
+Create environment and install requirements
+```bash
+conda create -n mlg python=3.10
+pip install -r requirements.txt
+```
+Install PyTorch and PyTorch Geometric dependencies
+
+```bash
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 
+pip install torch-sparse -f https://pytorch-geometric.com/whl/torch-2.1.0+cu121.html
+pip install torch-scatter -f https://pytorch-geometric.com/whl/torch-2.1.0+cu121.html
+```
+
 Project Organization
 ------------
 
