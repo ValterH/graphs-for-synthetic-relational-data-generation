@@ -85,7 +85,7 @@ class Noiser:
 class MissingColumnError(Exception):
     pass
 
-def generate_noised_dataset(dataset_name):
+def generate_noised_dataset(dataset_name, noise_fk=False):
     tables_train = load_tables(dataset_name, split='train')
     metadata = load_metadata(dataset_name)
 
@@ -95,6 +95,16 @@ def generate_noised_dataset(dataset_name):
         pr_key = metadata.get_primary_key(table)
         id_col_idx = tables_train[table].columns.get_loc(pr_key)
         id_col = tables_train[table].pop(pr_key)
+
+        # remove foreign keys also if necessary
+        if not noise_fk:
+            fk_col_idxs = []
+            fk_cols = []
+            for i, col in enumerate(tables_train[table].columns):
+                type_ = get_field_type(table, col, metadata._metadata)
+                if type_ == "id":
+                    fk_col_idxs.append(i)
+                    fk_cols.append(tables_train[table].pop(col))
 
         # create index lists for cat and num cols
         cat_idx = []
@@ -130,8 +140,15 @@ def generate_noised_dataset(dataset_name):
             if get_field_type(table, col, metadata._metadata) == "datetime":
                 synthetic_table[col] = synthetic_table[col].apply(lambda x : pd.to_datetime(x, unit="s"))
         
+        # add back foreign keys if necessary
+        if not noise_fk:
+            for loc in fk_col_idxs:
+                col = fk_cols.pop(0)
+                synthetic_table.insert(loc=loc, column=col.name, value=col)
+                
         # add back id column
         synthetic_table.insert(loc=id_col_idx, column=id_col.name, value=id_col)
+
         synthetic_data[table] = synthetic_table
 
     save_tables(synthetic_data, dataset_name, data_type='synthetic/noiser')
