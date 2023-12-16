@@ -93,6 +93,7 @@ def generate_noised_dataset(dataset_name):
     for table in tables_train:
         # remove id column/-s
         pr_key = metadata.get_primary_key(table)
+        id_col_idx = tables_train[table].columns.get_loc(pr_key)
         id_col = tables_train[table].pop(pr_key)
 
         # create index lists for cat and num cols
@@ -128,7 +129,9 @@ def generate_noised_dataset(dataset_name):
         for col in tables_train[table].columns:
             if get_field_type(table, col, metadata._metadata) == "datetime":
                 synthetic_table[col] = synthetic_table[col].apply(lambda x : pd.to_datetime(x, unit="s"))
-
+        
+        # add back id column
+        synthetic_table.insert(loc=id_col_idx, column=id_col.name, value=id_col)
         synthetic_data[table] = synthetic_table
 
     save_tables(synthetic_data, dataset_name, data_type='synthetic/noiser')
@@ -143,5 +146,5 @@ if __name__ == '__main__':
     # print(iris)
     # print(noised_iris)
 
-    # generate_noised_dataset('rossmann-store-sales')
+    generate_noised_dataset('rossmann-store-sales')
     generate_noised_dataset('mutagenesis')
