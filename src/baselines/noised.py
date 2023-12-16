@@ -1,17 +1,21 @@
 import os
 import pickle
 
-from sdv.relational import HMA1
+from data.utils import save_tables, load_tables, load_metadata, get_root_table
 
-from src.data.utils import save_tables, load_tables, load_metadata, get_root_table
+"""
+params:
+    par_cat - how many cat cols are noised
+    par_num - how much numerical cols are noised
+"""
 
-
-def generate_sdv(dataset_name):
+def generate_noised_dataset(dataset_name):
     tables_train = load_tables(dataset_name, split='train')
     metadata = load_metadata(dataset_name)
     root_table = get_root_table(dataset_name)
-    model = HMA1(metadata=metadata)
-    model.fit(tables_train)
+
+    model = None
+
     model_save_path = f'models/sdv/{dataset_name}/model.pickle'
     if not os.path.exists(os.path.dirname(model_save_path)):
         os.makedirs(os.path.dirname(model_save_path))
@@ -24,5 +28,5 @@ def generate_sdv(dataset_name):
 
 
 if __name__ == '__main__':
-    generate_sdv('rossmann-store-sales')
-    generate_sdv('mutagenesis')
+    generate_noised_dataset('rossmann-store-sales')
+    generate_noised_dataset('mutagenesis')

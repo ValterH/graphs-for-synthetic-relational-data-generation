@@ -14,6 +14,11 @@ def load_metadata(dataset_name):
     path = os.path.join(root_dir, 'data', 'metadata', f'{dataset_name}_metadata.json')
     return Metadata(path)
 
+def get_field_type(table_name, field_name, data):
+    try:
+        return data["tables"][table_name]["fields"][field_name]["type"]
+    except KeyError:
+        return None
 
 def get_root_table(dataset_name):
     if dataset_name == "biodegradability":
