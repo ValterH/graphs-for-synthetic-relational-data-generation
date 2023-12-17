@@ -41,7 +41,7 @@ def conditionally_sample(tables, metadata, root):
         child_table = tables[child]
         fks = metadata.get_foreign_keys(root, child)
         for fk in fks:
-            parent_fk = find_fk(root, fk, metadata)
+            parent_fk = find_fk(root, child, fk, metadata)
             if parent_fk is None:
                 continue
             parent_ids = parent[parent_fk].unique()
@@ -110,11 +110,12 @@ def prepare_dataset(dataset_name, seed=42):
     save_tables(tables_test, dataset_name, split='test')
 
 
-def find_fk(parent, reference, metadata):
-    for field in metadata.to_dict()["tables"][parent]["fields"]:
-        if field in reference:
-            return field
-    return None
+def find_fk(parent, child, reference, metadata):
+    fields = metadata.to_dict()["tables"][child]["fields"]
+    if fields[reference]['ref']['table'] == parent:
+        return fields[reference]['ref']['field']
+    else:
+        return None
 
 
 def merge_children(tables, metadata, root, how="left"):
@@ -123,13 +124,13 @@ def merge_children(tables, metadata, root, how="left"):
     for child in children:
         fks = metadata.get_foreign_keys(root, child)
         for i, fk in enumerate(fks):
-            parent_fk = find_fk(root, fk, metadata)
+            parent_fk = find_fk(root, child, fk, metadata)
             if parent_fk is None:
                 continue
-            child_table = merge_children(tables, metadata, child)
+            child_table = merge_children(tables, metadata, child, how=how)
             if fk in parent.columns:
                 parent = parent.merge(
-                    child_table.drop_duplicates(),
+                    child_table,
                     left_on=fk,
                     right_on=fk,
                     how=how,
@@ -139,10 +140,62 @@ def merge_children(tables, metadata, root, how="left"):
                 # this happens when there are 2 foreign keys from the same table
                 # e.g. bond in biodegradabaility with fks atom_id and atom_id_2
                 parent = parent.merge(
-                    child_table.drop_duplicates(),
+                    child_table,
                     left_on=parent_fk,
                     right_on=fk,
                     how=how,
                     suffixes=("", f"_{child}_{i}"),
                 )
+    return parent
+
+
+def add_number_of_children(table, metadata, tables):
+    parent = tables[table].copy()
+    children = metadata.get_children(table)
+    for child in children:
+        child_table = add_number_of_children(child, metadata, tables)
+        fks = metadata.get_foreign_keys(table, child)
+        child_pk = metadata.get_primary_key(child)
+        for fk in fks:
+            parent_fk = find_fk(table, child, fk, metadata)
+            if parent_fk is None:
+                continue
+            # count number of children for each parent row
+            num_children = child_table.groupby(fk).count()[child_pk].astype('int16')
+            num_children = num_children.reset_index()
+            num_children.columns = [fk, f"{child}_count"]
+            # join number of children to parent table
+            parent = parent.merge(
+                num_children, left_on=parent_fk, right_on=fk, how="left"
+            )
+            if fk != parent_fk:
+                parent = parent.drop(columns=fk)
+
+            # aggregate the number of grandchildren
+            for column in child_table.columns:
+                if f"_count" in column:
+                    # add sum of grandchildren
+                    num_grandchildren = child_table.groupby(fk).sum(numeric_only=True)[
+                        column
+                    ].astype('int16')
+                    num_grandchildren = num_grandchildren.reset_index()
+                    num_grandchildren.columns = [fk, f"grandchildren_sum_{column}"]
+                    parent = parent.merge(
+                        num_grandchildren, left_on=parent_fk, right_on=fk, how="left"
+                    )
+                    # add mean of grandchildren
+                    mean_grandchildren = child_table.groupby(fk).mean(
+                        numeric_only=True
+                    )[column].astype('float32')
+                    mean_grandchildren = mean_grandchildren.reset_index()
+                    mean_grandchildren.columns = [fk, f"grandchildren_mean_{column}"]
+                    parent = parent.merge(
+                        mean_grandchildren, left_on=parent_fk, right_on=fk, how="left"
+                    )
+
+        # where the parent id does not match set to 0
+        for column in parent.columns:
+            if f"{child}_count" in column:
+                parent[column] = parent[column].fillna(0)
+
     return parent

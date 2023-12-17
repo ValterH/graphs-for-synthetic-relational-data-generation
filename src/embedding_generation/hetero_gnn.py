@@ -10,10 +10,9 @@ import torch_geometric.nn as pyg_nn
 
 from sklearn.metrics import f1_score
 from deepsnap.hetero_gnn import forward_op
-from deepsnap.hetero_graph import HeteroGraph
 from torch_sparse import SparseTensor, matmul
 
-from src.data_modelling.deepsnap_datasets import create_deepsnap_dataset, deepsnap_dataset_from_graph
+from src.data_modelling.deepsnap_datasets import create_deepsnap_dataset
 
 class HeteroGNNConv(pyg_nn.MessagePassing):
     def __init__(self, in_channels_src, in_channels_dst, out_channels):
@@ -23,23 +22,14 @@ class HeteroGNNConv(pyg_nn.MessagePassing):
         self.in_channels_dst = in_channels_dst
         self.out_channels = out_channels
 
-        # To simplify implementation, please initialize both self.lin_dst
-        # and self.lin_src out_features to out_channels
         self.lin_dst = None
         self.lin_src = None
 
         self.lin_update = None
 
-        ############# Your code here #############
-        ## (~3 lines of code)
-        ## Note:
-        ## 1. Initialize the 3 linear layers.
-        ## 2. Think through the connection between the mathematical
-        ##    definition of the update rule and torch linear layers!
         self.lin_src = nn.Linear(self.in_channels_src, self.out_channels, bias=False)
         self.lin_dst = nn.Linear(self.in_channels_dst, self.out_channels, bias=False)
         self.lin_update = nn.Linear(self.out_channels * 2, self.out_channels, bias=False)
-        ##########################################
 
     def forward(
         self,
@@ -48,50 +38,18 @@ class HeteroGNNConv(pyg_nn.MessagePassing):
         edge_index,
         size=None
     ):
-        ############# Your code here #############
-        ## (~1 line of code)
-        ## Note:
-        ## 1. Unlike Colabs 3 and 4, we just need to call self.propagate with
-        ## proper/custom arguments.
         return self.propagate(edge_index, size=size, node_feature_dst=node_feature_dst, node_feature_src=node_feature_src)
-        ##########################################
+
 
     def message_and_aggregate(self, edge_index, node_feature_src):
 
-        out = None
-        ############# Your code here #############
-        ## (~1 line of code)
-        ## Note:
-        ## 1. Different from what we implemented in Colabs 3 and 4, we use message_and_aggregate
-        ##    to combine the previously seperate message and aggregate functions.
-        ##    The benefit is that we can avoid materializing x_i and x_j
-        ##    to make the implementation more efficient.
-        ## 2. To implement efficiently, refer to PyG documentation for message_and_aggregate
-        ##    and sparse-matrix multiplication:
-        ##    https://pytorch-geometric.readthedocs.io/en/latest/notes/sparse_tensor.html
-        ## 3. Here edge_index is torch_sparse SparseTensor. Although interesting, you
-        ##    do not need to deeply understand SparseTensor represenations!
-        ## 4. Conceptually, think through how the message passing and aggregation
-        ##    expressed mathematically can be expressed through matrix multiplication.
-
-        out = matmul(edge_index, node_feature_src, reduce=self.aggr)
-        ##########################################
-
-        return out
+        return matmul(edge_index, node_feature_src, reduce=self.aggr)
+    
 
     def update(self, aggr_out, node_feature_dst):
-
-        ############# Your code here #############
-        ## (~4 lines of code)
-        ## Note:
-        ## 1. The update function is called after message_and_aggregate
-        ## 2. Think through the one-one connection between the mathematical update
-        ##    rule and the 3 linear layers defined in the constructor.
         node_feature_dst = self.lin_dst(node_feature_dst)
         aggr_out = self.lin_src(aggr_out)
         aggr_out = self.lin_update(torch.cat((node_feature_dst, aggr_out), dim=1))
-        ##########################################
-
         return aggr_out
 
 
@@ -109,28 +67,12 @@ class HeteroGNNWrapperConv(deepsnap.hetero_gnn.HeteroConv):
         self.attn_proj = None
 
         if self.aggr == "attn":
-            ############# Your code here #############
-            ## (~1 line of code)
-            ## Note:
-            ## 1. Initialize self.attn_proj, where self.attn_proj should include
-            ##    two linear layers. Note, make sure you understand
-            ##    which part of the equation self.attn_proj captures.
-            ## 2. You should use nn.Sequential for self.attn_proj
-            ## 3. nn.Linear and nn.Tanh are useful.
-            ## 4. You can model a weight vector (rather than matrix) by using:
-            ##    nn.Linear(some_size, 1, bias=False).
-            ## 5. The first linear layer should have out_features as args['attn_size']
-            ## 6. You can assume we only have one "head" for the attention.
-            ## 7. We recommend you to implement the mean aggregation first. After
-            ##    the mean aggregation works well in the training, then you can
-            ##    implement this part.
 
             self.attn_proj = nn.Sequential(
                 nn.Linear(args['hidden_size'], args['attn_size']),
                 nn.Tanh(),
                 nn.Linear(args['attn_size'], 1, bias=False)
             )
-            ##########################################
 
     def reset_parameters(self):
         super(HeteroGNNWrapperConv, self).reset_parameters()
@@ -170,14 +112,8 @@ class HeteroGNNWrapperConv(deepsnap.hetero_gnn.HeteroConv):
         # type aggregation results.
 
         if self.aggr == "mean":
-
-            ############# Your code here #############
-            ## (~2 lines of code)
-            ## Note:
-            ## 1. Explore the function parameter `xs`!
             xs = torch.stack(xs, dim=0)
             return xs.mean(dim=0)
-            ##########################################
 
         elif self.aggr == "attn":
             N = xs[0].shape[0] # Number of nodes for that node type
@@ -200,14 +136,8 @@ def generate_convs(hetero_graph, conv, hidden_size, first_layer=False):
     # returns a dictionary of `HeteroGNNConv`
     # layers where the keys are message types. `hetero_graph` is deepsnap `HeteroGraph`
     # object and the `conv` is the `HeteroGNNConv`.
-
     convs = {}
 
-    ############# Your code here #############
-    ## (~9 lines of code)
-    ## Note:
-    ## 1. See the hints above!
-    ## 2. conv is of type `HeteroGNNConv`
     for message_type in hetero_graph.message_types:
       if first_layer:
         in_channels_src = hetero_graph.num_node_features(message_type[0])
@@ -216,7 +146,6 @@ def generate_convs(hetero_graph, conv, hidden_size, first_layer=False):
         in_channels_src = hidden_size
         in_channels_dst = hidden_size
       convs[message_type] = conv(in_channels_src, in_channels_dst, hidden_size)
-    ##########################################
 
     return convs
 
@@ -390,12 +319,14 @@ def compute_hetero_gnn_embeddings(hetero_graph, dataset_name, target_table, mode
         }
     model_save_path = os.path.join(model_save_dir, dataset_name, f"model_{target_table}.pt")
 
-    # Node feature and node label to device
+    # Node feature to device
     for key in hetero_graph.node_feature:
         hetero_graph.node_feature[key] = hetero_graph.node_feature[key].to(args['device'])
 
     # Edge_index to sparse tensor and to device
     for key in hetero_graph.edge_index:
+        if isinstance(hetero_graph.edge_index[key], SparseTensor):
+            continue
         edge_index = hetero_graph.edge_index[key]
         adj = SparseTensor(row=edge_index[0], col=edge_index[1], sparse_sizes=(hetero_graph.num_nodes(key[0]), hetero_graph.num_nodes(key[2])))
         hetero_graph.edge_index[key] = adj.t().to(args['device'])
@@ -404,20 +335,28 @@ def compute_hetero_gnn_embeddings(hetero_graph, dataset_name, target_table, mode
     model.load_state_dict(torch.load(model_save_path))
 
     # save last layer embeddings
-    last_layer_embeddings = model.get_embeddings(hetero_graph.node_feature, hetero_graph.edge_index, last_relu=False)
+    with torch.no_grad():
+        last_layer_embeddings = model.get_embeddings(hetero_graph.node_feature, hetero_graph.edge_index, last_relu=False)
     return last_layer_embeddings[target_table].cpu().detach().numpy()
     
 
 def main():
-    target_table = 'store'
-    masked_tables = ['store', 'test']
+    target_table = 'test'
+    masked_tables = ['test']
     dataset_name = 'rossmann-store-sales'
     train_hetero_gnn(dataset_name, target_table, masked_tables)
+    hetero_graph = create_deepsnap_dataset(dataset_name, target_table, masked_tables, k=10)
+    embeddings = compute_hetero_gnn_embeddings(hetero_graph, dataset_name, target_table)
+    np.save(f'data/embeddings/{target_table}_embeddings.npy', embeddings)
 
     target_table = 'molecule'
     dataset_name = 'mutagenesis'
     masked_tables = ['molecule', 'atom', 'bond']
     train_hetero_gnn(dataset_name, target_table, masked_tables)
+    hetero_graph = create_deepsnap_dataset(dataset_name, target_table, masked_tables, k=10)
+    compute_hetero_gnn_embeddings(hetero_graph, dataset_name, target_table)
+    embeddings = compute_hetero_gnn_embeddings(hetero_graph, dataset_name, target_table)
+    np.save(f'data/embeddings/{target_table}_embeddings.npy', embeddings)
 
 if __name__ == '__main__':
     main()

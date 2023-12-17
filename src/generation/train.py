@@ -28,6 +28,7 @@ def train_pipline(dataset_name, run, retrain_vae=False, cond="mlp", message_pass
     
     # create graph 
     G, _ = database_to_graph(dataset_name)
+    
     if message_passing == 'simple':
         dataset = pyg_dataset_from_graph(G, dataset_name)
         # train GIN and compute structural embeddings using GIN
@@ -48,17 +49,17 @@ def train_pipline(dataset_name, run, retrain_vae=False, cond="mlp", message_pass
         
         if retrain_vae or not os.path.exists(f'ckpt/{table}/vae/decoder.pt'):
             print(f'Training VAE for table {table}')
-            X_num, X_cat, categories, d_numerical = preprocess(f'tabsyn/data/{table}', task_type = 'binclass', concat=False)
+            X_num, X_cat, categories, d_numerical = preprocess(f'tabsyn/data/{table}', concat=False)
             train_vae(X_num, X_cat, categories, d_numerical, ckpt_dir = f'ckpt/{table}/vae' , epochs=epochs_vae, device=device)
         else:
             print(f'Reusing VAE for table {table}')
             
         # combine vae embeddings from parent tables with structural embeddings from the current table to obtain condition diffusion
         if message_passing == 'simple':
-            conditional_embeddings, _, _ = simple_message_passing(metadata, tables, table, gin_data_save_path, train=True)
+            conditional_embeddings, _, _, _ = simple_message_passing(metadata, tables, table, gin_data_save_path, train=True)
         elif message_passing == 'gnn':
             train_hetero_gnn(dataset_name, table, masked_tables)
-            conditional_embeddings, _, _ = gnn_message_passing(metadata, G, table, masked_tables, dataset_name, k=k)
+            conditional_embeddings, _, _, _ = gnn_message_passing(metadata, G, table, masked_tables, dataset_name, k=k)
             masked_tables.remove(table)
         else:
             raise NotImplementedError(f'Message passing method {message_passing} not implemented')

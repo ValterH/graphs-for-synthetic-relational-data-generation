@@ -1,23 +1,21 @@
-import os
-import pandas as pd
-import numpy as np
-import pickle
 import argparse
 
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
-from sklearn.pipeline import Pipeline
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import log_loss, accuracy_score
-from xgboost import XGBClassifier
-from sdmetrics.utils import HyperTransformer
-from sklearn.model_selection import train_test_split, cross_val_score
+import pandas as pd
+import numpy as np
 
-from src.data.utils import merge_children, load_tables, load_metadata, get_root_table
+
+from sklearn.metrics import log_loss
+from sklearn.pipeline import Pipeline
+from sdmetrics.utils import HyperTransformer
+from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+
+from src.data.utils import merge_children, load_tables, load_metadata, get_root_table, add_number_of_children
 
 """
 How to call:
 
-python src/eval/eval_classifier.py --model [MODEL_FOR_CLASSIFICATION] --dataset [NAME_OF_DATASET] --method [SYNTHETIC_DATA_GENERATION_METHOD]
+python src/eval/eval_classifier.py --dataset [NAME_OF_DATASET] --method [SYNTHETIC_DATA_GENERATION_METHOD]
 
 """
 
@@ -119,8 +117,9 @@ def drop_ids(table, table_name, metadata):
 
     
 def discriminative_detection(original, synthetic, clf=LogisticRegression(solver='lbfgs', max_iter=100), 
-                             max_items = 100000, save_path = None, **kwargs):
+                             max_items = 100000, **kwargs):
 
+    seed = kwargs.get('seed', 42)
     transformed_original = original.copy()
     transformed_synthetic = synthetic.copy()
 
@@ -129,16 +128,8 @@ def discriminative_detection(original, synthetic, clf=LogisticRegression(solver=
     transformed_synthetic = transformed_synthetic.reindex(column_names, axis=1)
 
     n = min(max_items, transformed_original.shape[0], transformed_synthetic.shape[0])
-    transformed_original = transformed_original.sample(n=n, random_state=42, replace=False)
-    transformed_synthetic = transformed_synthetic.sample(n=n, random_state=42, replace=False)
-
-    
-    if 'Date' in column_names:
-        transformed_original['Date'] = pd.to_numeric(pd.to_datetime(transformed_original['Date']))
-        transformed_synthetic['Date'] = pd.to_numeric(pd.to_datetime(transformed_synthetic['Date']))
-        # TODO: check if Date column is still problematic
-        # transformed_original.drop('Date', axis=1, inplace=True)
-        # transformed_synthetic.drop('Date', axis=1, inplace=True)
+    transformed_original = transformed_original.sample(n=n, random_state=seed, replace=False)
+    transformed_synthetic = transformed_synthetic.sample(n=n, random_state=seed, replace=False)
 
     # synthetic labels are 1 as this is what we are interested in (for precision and recall)
     y = np.hstack([
@@ -157,6 +148,7 @@ def discriminative_detection(original, synthetic, clf=LogisticRegression(solver=
 
 
     def cross_validation(model, X, y, cv=5):
+        np.random.seed(seed)
         folds = np.random.randint(0, cv, size=X.shape[0])
         scores = {
             'zero_one': [],
@@ -172,23 +164,7 @@ def discriminative_detection(original, synthetic, clf=LogisticRegression(solver=
         scores['log_loss'] = np.hstack(scores['log_loss'])
         return scores
 
-    
-    scores = cross_validation(model, X, y, cv=5)
-
-    # # Feature importance
-    # X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, shuffle=True, stratify=y)
-
-    # ht = CustomHyperTransformer()
-    # X_train = ht.fit_transform(X_train)
-    # X_test = ht.transform(X_test)
-    # model.fit(X_train, y_train)
-
-    # feature_importances = list(zip(X_train.columns, model['clf'].feature_importances_))
-    # feature_importances.sort(key=lambda x: x[1], reverse=True)
-    # for feature, importance in feature_importances:
-    #     print(f'{feature :<12}: {importance:.3}')
-
-    return scores
+    return cross_validation(model, X, y, cv=5)
 
 
 def parent_child_discriminative_detection(original, synthetic, clf=LogisticRegression(solver='lbfgs', max_iter=100), 
@@ -216,11 +192,9 @@ def get_args():
     parser.add_argument('--dataset', type=str, default='rossmann-store-sales',
                         help='Specify the dataset to evaluate.')
     
-    parser.add_argument('--method', type=str, default='sdv', 
+    parser.add_argument('--method', type=str, default='ours/mlp_gnn', 
                         help='Specify the synthetic data generation method to evaluate')
     
-    parser.add_argument('--model', type=str, choices=['logistic', 'xgboost'], default='xgboost',
-                        help='Specify the classification model')
 
     # Parse the command-line arguments
     args = parser.parse_args()
@@ -228,31 +202,65 @@ def get_args():
     return args
 
 
-if __name__ == "__main__":
-    args = get_args()    
-    if args.model == 'logistic':
-        clf = LogisticRegression(solver='lbfgs', max_iter=100)
-    elif args.model == 'xgboost':
-        clf = XGBClassifier(random_state=42)
-    else:
-        raise ValueError('Model not supported.')
-    
-    tables_synthetic = load_tables(args.dataset, data_type=f'synthetic/{args.method}')
-    tables_original = load_tables(args.dataset, split='train')
+def logistic_detection(dataset, method, seed=0):
+    clf = LogisticRegression(solver='lbfgs', max_iter=250, random_state=seed)
 
-    metadata = load_metadata(args.dataset)
-    root_table = get_root_table(args.dataset)
+    metadata = load_metadata(dataset)
+    root_table = get_root_table(dataset)
 
-    print('multi-table')
+    tables_synthetic = load_tables(dataset, data_type=f'synthetic/{method}')
+    tables_original = load_tables(dataset, split='train')
+    tables_synthetic_children = dict()
+    tables_original_children = dict()
+    for table in metadata.get_tables():
+        # convert to correct data type
+        for column, data_type in metadata.get_dtypes(table).items():
+            if data_type == 'object':
+                # convert both to the same datatype before coneverting to string
+                original_dtype = tables_original[table][column].dtype
+                tables_synthetic[table][column] = tables_synthetic[table][column].astype(original_dtype)
+                tables_synthetic[table][column] = tables_synthetic[table][column].astype(str)
+                tables_original[table][column] = tables_original[table][column].astype(str)
+            elif data_type == 'datetime':
+                tables_synthetic[table][column] = pd.to_numeric(pd.to_datetime(tables_synthetic[table][column]))
+                tables_original[table][column] = pd.to_numeric(pd.to_datetime(tables_original[table][column]))
+            else:
+                tables_synthetic[table][column] = tables_synthetic[table][column].astype(data_type)
+                tables_original[table][column] = tables_original[table][column].astype(data_type)
+        if metadata.get_children(table):
+            tables_synthetic_children[table] = add_number_of_children(table, metadata, tables_synthetic)
+            tables_original_children[table] = add_number_of_children(table, metadata, tables_original)
+        else:
+            tables_synthetic_children[table] = tables_synthetic[table].copy()
+            tables_original_children[table] = tables_original[table].copy()
+
     pc_results = parent_child_discriminative_detection(tables_original, tables_synthetic, 
-                                                       clf=clf, metadata=metadata, root_table=root_table)
+                                                       clf=clf, metadata=metadata, root_table=root_table, seed=seed)
     
-    results = {'parent_child': pc_results['zero_one']}
-    for table in tables_original.keys():
+    pc_children_results = parent_child_discriminative_detection(tables_original_children, tables_synthetic_children, 
+                                                                clf=clf, metadata=metadata, root_table=root_table, seed=seed)
+    
+    results = {
+        'parent_child': pc_results['zero_one'],
+        'parent_child_children': pc_children_results['zero_one']
+        }
+    for table in metadata.get_tables():
         original = drop_ids(tables_original[table].copy(), table, metadata)
         synthetic = drop_ids(tables_synthetic[table].copy(), table, metadata)
-        print(table)
-        results[table] = discriminative_detection(original, synthetic, clf=clf)['zero_one']
+        results[table] = discriminative_detection(original, synthetic, clf=clf, seed=seed)['zero_one']
+        if metadata.get_children(table):
+            original_children = drop_ids(tables_original_children[table].copy(), table, metadata)
+            synthetic_children = drop_ids(tables_synthetic_children[table].copy(), table, metadata)
+            results[f'{table}_children'] = discriminative_detection(original_children, synthetic_children, clf=clf, seed=seed)['zero_one']
     
+    return results
+
+
+def main():
+    args = get_args()   
+    results = logistic_detection(args.dataset, args.method)
     for key, value in results.items():
-        print(f'{key :<12}: {np.mean(value):.3} ± {np.std(value) / np.sqrt(len(value)):.3}')
+        print(f'{key :<22}: {np.mean(value):.3} ± {np.std(value) / np.sqrt(len(value)):.3}')
+
+if __name__ == "__main__":
+    main()

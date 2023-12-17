@@ -157,6 +157,9 @@ def sample_diff(dataname, run, is_cond=True, cond='linear', device='cuda:0', num
             # parse float from string (model outputs floats)
             syn_df[col] = syn_df[col].apply(lambda x: float(x))
         syn_df[col] = syn_df[col].astype(datatype)
+        # convert missing values ('nan') to NaN to match original data
+        if datatype == 'str':
+            syn_df[col] = syn_df[col].replace('nan', np.nan)
     syn_df.rename(columns = idx_name_mapping, inplace=True)
     
     # add fk column if conditional

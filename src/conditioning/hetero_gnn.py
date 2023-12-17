@@ -8,6 +8,7 @@ def gnn_message_passing(metadata, G, target_table, masked_tables, dataset_name, 
     # combine vae embeddings from parent tables with structural embeddings from the current table to obtain condition diffusion
     hetero_graph = deepsnap_dataset_from_graph(G, metadata, masked_tables, label_encoders_path=f'data/hetero_graph/{dataset_name}_{target_table}_{k}_label_encoders.pkl')
     ids = hetero_graph.node_label_index[target_table].tolist()
+    original_ids = hetero_graph.node_to_graph_mapping[target_table].tolist()
     conditional_embeddings = compute_hetero_gnn_embeddings(hetero_graph, dataset_name, target_table)
     foreign_keys = dict()
     for parent in metadata.get_parents(target_table):
@@ -18,4 +19,4 @@ def gnn_message_passing(metadata, G, target_table, masked_tables, dataset_name, 
             assert fk_edge_index[0].tolist() == ids
             foreign_keys[fk] = fk_edge_index[1].tolist()
 
-    return conditional_embeddings, ids, foreign_keys
+    return conditional_embeddings, ids, original_ids, foreign_keys

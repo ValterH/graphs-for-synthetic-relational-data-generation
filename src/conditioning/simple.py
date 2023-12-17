@@ -37,5 +37,6 @@ def simple_message_passing(metadata, tables, table, embeddings_save_path, train=
         conditional_embeddings = np.concatenate(conditional_embeddings, axis=1)
     else:
         conditional_embeddings = conditional_embeddings[0]
-
-    return conditional_embeddings, ids, foreign_keys
+    
+    original_ids = ids
+    return conditional_embeddings, ids, original_ids, foreign_keys

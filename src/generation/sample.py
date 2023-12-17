@@ -42,9 +42,9 @@ def sample(dataset_name, num_samples, run, cond="mlp", message_passing='simple',
     ids = {}
     for table in metadata.get_tables():
         if message_passing == 'simple':
-            conditional_embeddings, ids[table], foreign_keys = simple_message_passing(metadata, tables, table, embeddings_save_path)
+            conditional_embeddings, ids[table], original_ids, foreign_keys = simple_message_passing(metadata, tables, table, embeddings_save_path)
         elif message_passing == 'gnn':
-            conditional_embeddings, ids[table], foreign_keys = gnn_message_passing(metadata, G, table, masked_tables, dataset_name, k=k)
+            conditional_embeddings, ids[table], original_ids, foreign_keys = gnn_message_passing(metadata, G, table, masked_tables, dataset_name, k=k)
             masked_tables.remove(table)
         else:
             raise NotImplementedError(f'Message passing method {message_passing} not implemented')
@@ -61,8 +61,7 @@ def sample(dataset_name, num_samples, run, cond="mlp", message_passing='simple',
         if message_passing == 'simple' and metadata.get_children(table):
             create_latent_embeddings(df, table, device = device)
         
-        # TODO: check if this works
-        G = update_node_features(G, df, node_type=table, ids=ids[table])
+        G = update_node_features(G, df, node_type=table, ids=original_ids)
         
     
     save_tables(tables, dataset_name, data_type=f'synthetic/ours/{run}')
