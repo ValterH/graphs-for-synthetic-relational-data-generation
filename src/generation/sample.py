@@ -59,8 +59,8 @@ def sample(dataset_name, num_samples, run, cond="mlp", message_passing='simple',
 
         if message_passing == 'simple' and metadata.get_children(table):
             create_latent_embeddings(df, table, device = device)
-        
-        G = update_node_features(G, df, node_type=table, ids=original_ids)
+        elif message_passing == 'gnn':
+            G = update_node_features(G, df, node_type=table, ids=original_ids)
         
     
     save_tables(tables, dataset_name, data_type=f'synthetic/ours/{run}')
