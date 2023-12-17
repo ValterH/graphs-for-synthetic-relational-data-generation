@@ -4,11 +4,11 @@ import argparse
 import torch
 import numpy as np
 
-from diffusion import train_diff
-from autoencoder import train_vae
-from utils_train import preprocess
-from tabsyn.latent_utils import get_input_train
 from src.data.utils import load_tables, load_metadata
+from src.generation.diffusion import train_diff
+from src.generation.autoencoder import train_vae
+from src.generation.utils_train import preprocess
+from src.generation.tabsyn.latent_utils import get_input_train
 from src.data_modelling.table_to_graph import database_to_graph
 from src.embedding_generation.hetero_gnn import train_hetero_gnn
 from src.data_modelling.pyg_datasets import pyg_dataset_from_graph

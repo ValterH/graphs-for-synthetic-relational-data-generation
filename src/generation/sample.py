@@ -3,11 +3,10 @@ import argparse
 
 import torch
 import numpy as np
-import pandas as pd
 
-from diffusion import sample_diff
-from autoencoder import create_latent_embeddings
+from src.generation.diffusion import sample_diff
 from src.data.utils import load_metadata, save_tables
+from src.generation.autoencoder import create_latent_embeddings
 from src.data_modelling.table_to_graph import update_node_features
 from src.embedding_generation.gin_embeddings import generate_embeddings
 from src.conditioning import simple_message_passing, gnn_message_passing
