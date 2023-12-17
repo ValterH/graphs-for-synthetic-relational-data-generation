@@ -58,7 +58,7 @@ def train_pipline(dataset_name, run, retrain_vae=False, cond="mlp", message_pass
         if message_passing == 'simple':
             conditional_embeddings, _, _, _ = simple_message_passing(metadata, tables, table, gin_data_save_path, train=True)
         elif message_passing == 'gnn':
-            train_hetero_gnn(dataset_name, table, masked_tables)
+            train_hetero_gnn(dataset_name, table, masked_tables, epochs=epochs_gnn, k=k)
             conditional_embeddings, _, _, _ = gnn_message_passing(metadata, G, table, masked_tables, dataset_name, k=k)
             masked_tables.remove(table)
         else:
