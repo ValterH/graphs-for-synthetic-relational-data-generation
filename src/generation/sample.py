@@ -8,8 +8,9 @@ import pandas as pd
 from diffusion import sample_diff
 from autoencoder import create_latent_embeddings
 from src.data.utils import load_metadata, save_tables
-from src.conditioning import simple_message_passing, gnn_message_passing
+from src.data_modelling.table_to_graph import update_node_features
 from src.embedding_generation.gin_embeddings import generate_embeddings
+from src.conditioning import simple_message_passing, gnn_message_passing
 from src.data_modelling.pyg_datasets import sample_relational_distribution, pyg_dataset_from_graph
 
 
@@ -59,6 +60,10 @@ def sample(dataset_name, num_samples, run, cond="mlp", message_passing='simple',
 
         if message_passing == 'simple' and metadata.get_children(table):
             create_latent_embeddings(df, table, device = device)
+        
+        # TODO: check if this works
+        G = update_node_features(G, df, node_type=table, ids=ids[table])
+        
     
     save_tables(tables, dataset_name, data_type=f'synthetic/ours/{run}')
 

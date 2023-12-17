@@ -127,12 +127,32 @@ def database_to_subgraphs(database_name, split="train", directed=True):
     return graph_to_subgraphs(G, G_root_node_ids), G_root_node_ids
 
 
+def update_node_features(G, df, node_type, ids):
+    df["node_type"] = node_type
+    
+    keys = G.nodes(data=True)[ids[0]].keys()
+    node_attrs_dict = {}
+    for node_id, (i, row) in zip(ids, df.iterrows()):
+        new_attrs = {key: row[key] for key in keys}
+        node_attrs_dict[node_id] = new_attrs
+    
+    nx.set_node_attributes(G, node_attrs_dict)
+    return G
+
+
 ###########################################################################################
 
 
 def main():
     G_rossmann, rossmann_root_node_ids = database_to_graph("rossmann-store-sales")
+    rossmann_tables = load_tables("rossmann-store-sales", split="train")
+    G_rossmann_updated = update_node_features(G_rossmann.copy(), rossmann_tables["store"], "store", ids=rossmann_root_node_ids)
+    assert G_rossmann.nodes(data=True) == G_rossmann_updated.nodes(data=True), "The node features were not updated correctly"
+    
     G_mutagenesis, mutagenesis_root_node_ids = database_to_graph("mutagenesis")
+    mutagenesis_tables = load_tables("mutagenesis", split="train")
+    G_mutagenesis_updated = update_node_features(G_mutagenesis.copy(), mutagenesis_tables["molecule"], "molecule", ids=mutagenesis_root_node_ids)
+    assert G_mutagenesis.nodes(data=True) == G_mutagenesis_updated.nodes(data=True), "The node features were not updated correctly"
 
 
 if __name__ == "__main__":  
