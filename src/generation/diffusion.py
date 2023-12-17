@@ -9,9 +9,9 @@ from tqdm import tqdm
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
-from tabsyn.model import MLPDiffusion, Model
-from tabsyn.latent_utils import get_input_train, get_input_generate, recover_data, split_num_cat_target
-from tabsyn.diffusion_utils import sample
+from src.generation.tabsyn.model import MLPDiffusion, Model
+from src.generation.tabsyn.latent_utils import get_input_train, get_input_generate, recover_data, split_num_cat_target
+from src.generation.tabsyn.diffusion_utils import sample
 
 warnings.filterwarnings('ignore')
 

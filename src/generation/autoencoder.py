@@ -13,9 +13,9 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from tqdm import tqdm
 
-import tabsyn_utils as src
-from vae.model import Model_VAE, Encoder_model, Decoder_model
-from utils_train import preprocess, TabularDataset, get_dummy_numerical_features
+import src.generation.tabsyn_utils as src
+from src.generation.vae.model import Model_VAE, Encoder_model, Decoder_model
+from src.generation.utils_train import preprocess, TabularDataset, get_dummy_numerical_features
 
 warnings.filterwarnings('ignore')
 

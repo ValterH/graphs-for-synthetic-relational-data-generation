@@ -1,10 +1,9 @@
 import os
 
 import numpy as np
-import pandas as pd
 
-import tabsyn_utils as src
 from torch.utils.data import Dataset
+import src.generation.tabsyn_utils as tabsyn_utils
 
 def get_dummy_numerical_features(X_cat):
     x_train = X_cat['train'][:, -1:]
@@ -54,7 +53,7 @@ def preprocess(dataset_path, task_type = 'binclass', inverse = False, cat_encodi
     T_dict['cat_encoding'] = cat_encoding
     T_dict['y_policy'] = "default"
 
-    T = src.Transformations(**T_dict)
+    T = tabsyn_utils.Transformations(**T_dict)
 
     dataset = make_dataset(
         data_path = dataset_path,
@@ -71,7 +70,7 @@ def preprocess(dataset_path, task_type = 'binclass', inverse = False, cat_encodi
         X_train_num, X_test_num = X_num['train'], X_num['test']
         X_train_cat, X_test_cat = X_cat['train'], X_cat['test']
         
-        categories = src.get_categories(X_train_cat)
+        categories = tabsyn_utils.get_categories(X_train_cat)
         d_numerical = X_train_num.shape[1]
 
         X_num = (X_train_num, X_test_num)
@@ -110,7 +109,7 @@ def concat_y_to_X(X, y):
 
 def make_dataset(
     data_path: str,
-    T: src.Transformations,
+    T: tabsyn_utils.Transformations,
     task_type,
     change_val: bool,
     concat = True,
@@ -123,7 +122,7 @@ def make_dataset(
         y = {} if os.path.exists(os.path.join(data_path, 'y_train.npy')) else None
 
         for split in ['train', 'test']:
-            X_num_t, X_cat_t, y_t = src.read_pure_data(data_path, split)
+            X_num_t, X_cat_t, y_t = tabsyn_utils.read_pure_data(data_path, split)
             if X_num is not None:
                 X_num[split] = X_num_t
             if X_cat is not None:
@@ -139,7 +138,7 @@ def make_dataset(
         y = {} if os.path.exists(os.path.join(data_path, 'y_train.npy')) else None
 
         for split in ['train', 'test']:
-            X_num_t, X_cat_t, y_t = src.read_pure_data(data_path, split)
+            X_num_t, X_cat_t, y_t = tabsyn_utils.read_pure_data(data_path, split)
 
             if X_num is not None:
                 if concat:
@@ -150,7 +149,7 @@ def make_dataset(
             if y is not None:
                 y[split] = y_t
 
-    info = src.load_json(os.path.join(data_path, 'info.json'))
+    info = tabsyn_utils.load_json(os.path.join(data_path, 'info.json'))
 
     # TODO: SUPPORT NO NUMERICAL FEATURES
     # when there are no numerical features
@@ -160,17 +159,17 @@ def make_dataset(
         x_num_train, x_num_test = get_dummy_numerical_features(X_cat)
         X_num['train'] = x_num_train.reshape(-1, 1)
         X_num['test'] = x_num_test.reshape(-1, 1)
-    D = src.Dataset(
+    D = tabsyn_utils.Dataset(
         X_num,
         X_cat,
         y,
         y_info={},
-        task_type=src.TaskType(info['task_type']),
+        task_type=tabsyn_utils.TaskType(info['task_type']),
         n_classes=info.get('n_classes')
     )
 
     if change_val:
-        D = src.change_val(D)
+        D = tabsyn_utils.change_val(D)
 
     # def categorical_to_idx(feature):
     #     unique_categories = np.unique(feature)
@@ -181,4 +180,4 @@ def make_dataset(
     # for split in ['train', 'val', 'test']:
     # D.y[split] = categorical_to_idx(D.y[split].squeeze(1))
 
-    return src.transform_dataset(D, T, None)
+    return tabsyn_utils.transform_dataset(D, T, None)
