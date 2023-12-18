@@ -1,0 +1,7 @@
+parent_child          : 0.705 ± 0.00364
+parent_child_children : 0.708 ± 0.00362
+molecule              : 0.476 ± 0.0258
+molecule_children     : 0.508 ± 0.0258
+atom                  : 0.594 ± 0.00505
+atom_children         : 0.517 ± 0.00514
+bond                  : 0.628 ± 0.00482

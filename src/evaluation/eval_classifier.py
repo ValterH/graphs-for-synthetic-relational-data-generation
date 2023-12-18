@@ -1,8 +1,8 @@
+import os
 import argparse
 
 import pandas as pd
 import numpy as np
-
 
 from sklearn.metrics import log_loss
 from sklearn.pipeline import Pipeline
@@ -259,8 +259,20 @@ def logistic_detection(dataset, method, seed=0):
 def main():
     args = get_args()   
     results = logistic_detection(args.dataset, args.method)
-    for key, value in results.items():
-        print(f'{key :<22}: {np.mean(value):.3} ± {np.std(value) / np.sqrt(len(value)):.3}')
+    
+    # create a directory if it does not exist to store the results
+    run_name = args.method.split('/')[-1]
+    save_path = f"eval/classifier/{args.dataset}/{run_name}/results.txt"
+    if not os.path.exists(os.path.dirname(save_path)):
+        os.makedirs(os.path.dirname(save_path))
+    
+    with open(save_path, 'w', encoding='utf-8') as f:
+        for key, value in results.items():
+            # write to file
+            f.write(f'{key :<22}: {np.mean(value):.3} ± {np.std(value) / np.sqrt(len(value)):.3}\n')
+            # write to console
+            print(f'{key :<22}: {np.mean(value):.3} ± {np.std(value) / np.sqrt(len(value)):.3}')
+
 
 if __name__ == "__main__":
     main()
