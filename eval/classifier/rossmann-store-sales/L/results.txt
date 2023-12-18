@@ -1,0 +1,5 @@
+parent_child          : 0.548 ± 0.00177
+parent_child_children : 0.55 ± 0.00177
+store                 : 0.501 ± 0.0106
+store_children        : 0.507 ± 0.0106
+test                  : 0.525 ± 0.00178
