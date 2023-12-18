@@ -35,14 +35,15 @@ Project Organization
 
     ├── LICENSE
     ├── README.md          <- The top-level README for developers using this project.
-    ├── data               <- Directory containing the data used in the project
-    ├── models             <- Trained and serialized models, model predictions, or model summaries
+    ├── ckpt               <- Directory containing VAE and diffusion checkpoints.
+    ├── data               <- Directory containing the data used in the project.
+    ├── eval               <- Directory containing the evaluation results.
+    ├── models             <- Directory containing the GNN model weights.
     ├── notebooks          <- Jupyter notebooks.
-    ├── reports            <- Generated analysis as HTML, PDF, LaTeX, etc.
-    │   └── figures        <- Generated graphics and figures to be used in reporting
-    ├── requirements.txt   <- The requirements file for reproducing the analysis environment, e.g.
+    ├── requirements.txt   <- The requirements file for reproducing the environment
     ├── setup.py           <- makes project pip installable (pip install -e .) so src can be imported
     ├── src                <- Source code for use in this project.
+    ├── tabsyn             <- Modified tabsyn submodule code.
 <!--     
 │   ├── __init__.py    <- Makes src a Python module
     │   │
