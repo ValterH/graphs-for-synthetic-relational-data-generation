@@ -3,7 +3,9 @@
 
 import torch
 import numpy as np
-from scipy.stats import betaprime
+from tqdm import tqdm
+from torch.utils.data import DataLoader
+
 #----------------------------------------------------------------------------
 # Loss function corresponding to the variance preserving (VP) formulation
 # from the paper "Score-Based Generative Modeling through Stochastic
@@ -32,12 +34,29 @@ def sample(net, num_samples, dim, num_steps = 50, device = 'cuda:0', z_cond=None
     t_steps = torch.cat([net.round_sigma(t_steps), torch.zeros_like(t_steps[:1])])
 
     x_next = latents.to(torch.float32) * t_steps[0]
+    x_out = torch.zeros([num_samples, dim], device='cpu', dtype=torch.float32)
+
+    batch_size = 1000
+    data = torch.cat([x_next, z_cond], dim = 1)
+    data_loader = DataLoader(
+        data,
+        batch_size = batch_size,
+    )
+    pbar = tqdm(enumerate(data_loader), total=len(data_loader))
+    pbar.set_description(f"Sampling {num_samples} samples")
 
     with torch.no_grad():
-        for i, (t_cur, t_next) in enumerate(zip(t_steps[:-1], t_steps[1:])):
-            x_next = sample_step(net, num_steps, i, t_cur, t_next, x_next, z_cond=z_cond)
-
-    return x_next
+        for batch_idx, batch in pbar:
+            inputs = batch.float().to(device)
+            z_cond_batch = inputs[:, dim:]
+            x_next_batch = inputs[:, :dim]
+            for i, (t_cur, t_next) in enumerate(zip(t_steps[:-1], t_steps[1:])):
+                x_next_batch = sample_step(net, num_steps, i, t_cur, t_next, x_next_batch, z_cond=z_cond_batch)
+            if batch_idx + 1 == len(data_loader):
+                x_out[batch_size * batch_idx:] = x_next_batch.detach().cpu()
+            else:
+                x_out[batch_size * batch_idx: batch_size * (batch_idx + 1)] = x_next_batch.detach().cpu()
+    return x_out.to(device)
 
 def sample_step(net, num_steps, i, t_cur, t_next, x_next, z_cond=None):
     x_cur = x_next
