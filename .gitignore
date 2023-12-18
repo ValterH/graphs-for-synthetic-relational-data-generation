@@ -77,10 +77,11 @@ target/
 .ipynb_checkpoints/
 
 # exclude data from source control by default
-/data/
+/data/*
 !data/metadata
 !data/mutagenesis
 !data/rossmann-store-sales
+!data/synthetic
 
 # Mac OS-specific storage files
 .DS_Store
@@ -93,6 +94,5 @@ target/
 .mypy_cache/
 
 # Models and data folders
-synthetic/
 models/
 ckpt/
