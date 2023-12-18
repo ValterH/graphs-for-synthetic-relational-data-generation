@@ -6,7 +6,6 @@ from src.data.utils import load_tables, load_metadata, get_root_table
 ###########################################################################################
 
 def tables_to_graph(edge_index, source, target, source_attrs_df=None, target_attrs_df=None, directed=True):
-    # TODO: write docstring (source parent primary key, child primary key )
         
     # generate graph from edge connections in the df
     create_using=nx.DiGraph() if directed else nx.Graph()
@@ -36,8 +35,6 @@ def tables_to_graph(edge_index, source, target, source_attrs_df=None, target_att
 # -> we can split the graph by choosing the nodes in the parent table as root nodes and generating a tree for each root node
 # NOTE: we can imagine this as modeling the dataset tables as a list of connected rows
 def graph_to_subgraphs(G, root_nodes):
-    # TODO: write docstring (we cant use connected componets because ...)
-    
     
     subgraphs = []
     for root_node in root_nodes:
@@ -112,8 +109,7 @@ def database_to_graph(database_name, split="train", directed=True):
                 edge_index[parent_pk] = child_table[foreign_key]
                 edge_index[child_pk] = child_table[child_pk]
                 edge_index["edge_type"] = foreign_key
-                
-                # TODO: add features optionally and directed/undirected optionally
+
                 H = tables_to_graph(edge_index, source=parent_pk, target=child_pk, source_attrs_df=parent_table, target_attrs_df=child_table)
                 G = nx.compose(G, H)
     
