@@ -1,6 +1,9 @@
 Leveraging Graph Neural Networks for One-to-Many
 Relational Data Synthesis
 ==============================
+<p align="center">
+  <img src="images/pipeline.gif" />
+</p>
 
 Relational data synthesis is an emerging field in both research and industry. Its primary objective is
 to develop methods that allow for the creation of databases that preserve the inherent characteristics
