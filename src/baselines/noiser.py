@@ -4,16 +4,23 @@ import numpy as np
 import pandas as pd
 from scipy.stats import bernoulli
 import random
+import argparse
 
 from sklearn import datasets
 
-from src.data.utils import save_tables, load_tables, load_metadata, get_root_table, get_field_type
+from src.data.utils import save_tables, load_tables, load_metadata, get_root_table, get_field_type, merge_children
+from src.evaluation.eval_privacy import get_args, calculate_privacy, drop_ids
+from src.evaluation.eval_classifier import CustomHyperTransformer
+
 
 """
 params:
     par_cat - how many cat cols are noised
     par_num - how much numerical cols are noised
 """
+
+NOISE_SPACE = np.logspace(-3, 1, 100)
+
 
 class Noiser:
     def __init__(self, dataset, num_index, cat_index, noise_level=0.1, permut_probability=0.1, return_original=False):
@@ -85,7 +92,7 @@ class Noiser:
 class MissingColumnError(Exception):
     pass
 
-def generate_noised_dataset(dataset_name, noise_fk=False):
+def generate_noised_dataset(dataset_name, noise_fk=False, save_=True, noise_level_num=None, noise_level_cat=None, merge=False):
     tables_train = load_tables(dataset_name, split='train')
     metadata = load_metadata(dataset_name)
 
@@ -125,8 +132,28 @@ def generate_noised_dataset(dataset_name, noise_fk=False):
             else:
                 raise MissingColumnError("Column in dataset not in metadata")    
 
-        model = Noiser(tables_train[table], num_idx, cat_idx)
-
+        if noise_level_num:
+            if noise_level_cat:
+                model = Noiser(tables_train[table], 
+                               num_idx, 
+                               cat_idx, 
+                               noise_level=noise_level_num, 
+                               permut_probability=noise_level_cat)
+            else:
+                model = Noiser(tables_train[table], 
+                               num_idx, 
+                               cat_idx, 
+                               noise_level=noise_level_num)
+        elif noise_level_cat:
+            model = Noiser(tables_train[table], 
+                            num_idx, 
+                            cat_idx, 
+                            permut_probability=noise_level_cat)
+        
+        else:
+            model = Noiser(tables_train[table], 
+                            num_idx, 
+                            cat_idx)      
         # model_save_path = f'models/noiser/{dataset_name}/model.pickle'
         # if not os.path.exists(os.path.dirname(model_save_path)):
         #     os.makedirs(os.path.dirname(model_save_path))
@@ -151,17 +178,64 @@ def generate_noised_dataset(dataset_name, noise_fk=False):
 
         synthetic_data[table] = synthetic_table
 
-    save_tables(synthetic_data, dataset_name, data_type='synthetic/noiser')
+    if merge:
+        root_table = get_root_table(dataset_name)
+
+        synthetic = merge_children(synthetic_data, metadata, root_table)
+
+        # drop all foreign and primary keys
+        for table in metadata.to_dict()['tables'].keys():
+            drop_ids(synthetic, table, metadata)
+
+        transformed_synthetic = synthetic.copy()
+        
+        column_names = transformed_synthetic.columns.to_list()
+        transformed_synthetic = transformed_synthetic.reindex(column_names, axis=1)
+
+        max_items = 100000
+
+        if 'Date' in column_names:
+            transformed_synthetic['Date'] = pd.to_numeric(pd.to_datetime(transformed_synthetic['Date']))
+
+        ht = CustomHyperTransformer()
+        transformed_synthetic = ht.fit_transform(transformed_synthetic)
+        
+        transformed_synthetic.to_csv(f"data/synthetic/noiser/{dataset_name}/merged/noise_{noise_level_num}.csv")
+
+        return transformed_synthetic
+
+    if save_:
+        save_tables(synthetic_data, dataset_name, data_type='synthetic/noiser')
+    else:
+        return synthetic_data
+
+def get_args():
+    # Create an argument parser
+    parser = argparse.ArgumentParser(description='Noise parameters')
+
+    # dataset to evaluate
+    parser.add_argument('--dataset', type=str, default='rossmann-store-sales',
+                        help='Specify the dataset to evaluate.')
+    
+    parser.add_argument('--noise_level', type=float, default=0.1,
+                        help='Parameter for noise levels introduced')
+    
+    # Parse the command-line arguments
+    args = parser.parse_args()
+
+    return args
 
 
 if __name__ == '__main__':
-    # iris = datasets.load_iris(as_frame=True, return_X_y=True)
-    # iris = pd.concat((iris[1], iris[0]), axis=1)
-
-    # model = Noiser(iris, [0, 1, 2, 3], [4], noise_level=0.1, permut_probability=0.5)
-    # noised_iris = model.fit_transform()
-    # print(iris)
-    # print(noised_iris)
-
-    generate_noised_dataset('rossmann-store-sales')
-    generate_noised_dataset('mutagenesis')
+    args = get_args()
+    
+    params = {
+        "save_" : True,
+        "merge" : False
+    }
+    generate_noised_dataset(args.dataset, 
+                            noise_level_num=args.noise_level, 
+                            noise_level_cat=args.noise_level, 
+                            save_=params["save_"],
+                            merge=params["merge"])
+    
