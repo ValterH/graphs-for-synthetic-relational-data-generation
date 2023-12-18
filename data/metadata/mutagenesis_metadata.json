@@ -1,0 +1,86 @@
+{
+    "tables": {
+        "molecule": {
+            "fields": {
+                "molecule_id": {
+                    "type": "id",
+                    "subtype": "string"
+                },
+                "ind1": {
+                    "type": "categorical"
+                },
+                "inda": {
+                    "type": "numerical",
+                    "subtype": "integer"
+                },
+                "logp": {
+                    "type": "numerical",
+                    "subtype": "float"
+                },
+                "lumo": {
+                    "type": "numerical",
+                    "subtype": "float"
+                },
+                "mutagenic": {
+                    "type": "categorical"
+                }
+            },
+            "primary_key": "molecule_id"
+        },
+        "atom": {
+            "fields": {
+                "atom_id": {
+                    "type": "id",
+                    "subtype": "string"
+                },
+                "molecule_id": {
+                    "type": "id",
+                    "subtype": "string",
+                    "ref": {
+                        "table": "molecule",
+                        "field": "molecule_id"
+                    }
+                },
+                "element": {
+                    "type": "categorical"
+                },
+                "type": {
+                    "type": "categorical"
+                },
+                "charge": {
+                    "type": "numerical",
+                    "subtype": "float"
+                }
+            },
+            "primary_key": "atom_id"
+        },
+        "bond": {
+            "fields": {
+                "bond_id": {
+                    "type": "id",
+                    "subtype": "integer"
+                },
+                "atom1_id": {
+                    "type": "id",
+                    "subtype": "string",
+                    "ref": {
+                        "table": "atom",
+                        "field": "atom_id"
+                    }
+                },
+                "atom2_id": {
+                    "type": "id",
+                    "subtype": "string",
+                    "ref": {
+                        "table": "atom",
+                        "field": "atom_id"
+                    }
+                },
+                "type": {
+                    "type": "categorical"
+                }
+            },
+            "primary_key": "bond_id"
+        }
+    }
+}

@@ -1,0 +1,77 @@
+{
+    "tables": {
+        "store": {
+            "fields": {
+                "Store": {
+                    "type": "id",
+                    "subtype": "string"
+                },
+                "StoreType": {
+                    "type": "categorical"
+                },
+                "Assortment": {
+                    "type": "categorical"
+                },
+                "CompetitionDistance": {
+                    "type": "numerical",
+                    "subtype": "float"
+                },
+                "CompetitionOpenSinceMonth": {
+                    "type": "categorical"
+                },
+                "CompetitionOpenSinceYear": {
+                    "type": "numerical"
+                },
+                "Promo2": {
+                    "type": "categorical"
+                },
+                "Promo2SinceWeek": {
+                    "type": "numerical"
+                },
+                "Promo2SinceYear": {
+                    "type": "categorical"
+                },
+                "PromoInterval": {
+                    "type": "categorical"
+                }
+            },
+            "primary_key": "Store"
+        },
+        "test": {
+            "fields": {
+                "Id": {
+                    "type": "id",
+                    "subtype": "string"
+                },
+                "Store": {
+                    "type": "id",
+                    "subtype": "string",
+                    "ref": {
+                        "table": "store",
+                        "field": "Store"
+                    }
+                },
+                "DayOfWeek": {
+                    "type": "categorical"
+                },
+                "Date": {
+                    "type": "datetime",
+                    "format": "%Y-%m-%d"
+                },
+                "Open": {
+                    "type": "categorical"
+                },
+                "Promo": {
+                    "type": "categorical"
+                },
+                "StateHoliday": {
+                    "type": "categorical"
+                },
+                "SchoolHoliday": {
+                    "type": "categorical"
+                }
+            },
+            "primary_key": "Id"
+        }
+    }
+}

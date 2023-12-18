@@ -1,6 +1,9 @@
 Leveraging Graph Neural Networks for One-to-Many
 Relational Data Synthesis
 ==============================
+<p align="center">
+  <img src="images/pipeline.gif" />
+</p>
 
 Relational data synthesis is an emerging field in both research and industry. Its primary objective is
 to develop methods that allow for the creation of databases that preserve the inherent characteristics
@@ -11,19 +14,36 @@ their struggle to preserve the relationships between different tables within the
 
 >In this project explicitly model the relationships between tables by leveraging a graph representation of our data.
 
+Installation
+------------
+Create environment and install requirements
+```bash
+conda create -n mlg python=3.10
+conda activate mlg
+pip install -r requirements.txt
+```
+Install PyTorch and PyTorch Geometric dependencies
+
+```bash
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 
+pip install torch-sparse -f https://pytorch-geometric.com/whl/torch-2.1.0+cu121.html
+pip install torch-scatter -f https://pytorch-geometric.com/whl/torch-2.1.0+cu121.html
+```
+
 Project Organization
 ------------
 
     ├── LICENSE
     ├── README.md          <- The top-level README for developers using this project.
-    ├── data               <- Directory containing the data used in the project
-    ├── models             <- Trained and serialized models, model predictions, or model summaries
+    ├── ckpt               <- Directory containing VAE and diffusion checkpoints.
+    ├── data               <- Directory containing the data used in the project.
+    ├── eval               <- Directory containing the evaluation results.
+    ├── models             <- Directory containing the GNN model weights.
     ├── notebooks          <- Jupyter notebooks.
-    ├── reports            <- Generated analysis as HTML, PDF, LaTeX, etc.
-    │   └── figures        <- Generated graphics and figures to be used in reporting
-    ├── requirements.txt   <- The requirements file for reproducing the analysis environment, e.g.
+    ├── requirements.txt   <- The requirements file for reproducing the environment
     ├── setup.py           <- makes project pip installable (pip install -e .) so src can be imported
     ├── src                <- Source code for use in this project.
+    ├── tabsyn             <- Modified tabsyn submodule code.
 <!--     
 │   ├── __init__.py    <- Makes src a Python module
     │   │
