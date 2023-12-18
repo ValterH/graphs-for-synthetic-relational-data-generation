@@ -1,8 +1,9 @@
+import argparse
+
 import numpy as np
 import pandas as pd
 from sklearn.metrics.pairwise import pairwise_distances
 from sklearn.model_selection import train_test_split
-import argparse
 
 from src.data.utils import merge_children, load_tables, load_metadata, get_root_table
 from src.evaluation.eval_classifier import CustomHyperTransformer, drop_ids
@@ -84,12 +85,13 @@ def get_args():
 
     return args
 
-def prepare_dataset(args):
-    tables_synthetic = load_tables(args.dataset, data_type=f'synthetic/{args.method}')
-    tables_original = load_tables(args.dataset, split='train')
 
-    metadata = load_metadata(args.dataset)
-    root_table = get_root_table(args.dataset)
+def prepare_dataset(dataset, method):
+    tables_synthetic = load_tables(dataset, data_type=f'synthetic/{method}')
+    tables_original = load_tables(dataset, split='train')
+
+    metadata = load_metadata(dataset)
+    root_table = get_root_table(dataset)
 
     original = merge_children(tables_original, metadata, root_table)
     synthetic = merge_children(tables_synthetic, metadata, root_table)
@@ -122,6 +124,7 @@ def prepare_dataset(args):
 
     return transformed_original, transformed_synthetic
 
+
 def calculate_privacy(transformed_original, transformed_synthetic, **kwargs):
     if kwargs.get("privacy_percentile"):
         privacy_percentile = kwargs.get("privacy_percentile")
@@ -134,7 +137,7 @@ if __name__ == "__main__":
 
     args = get_args()
 
-    transformed_original, transformed_synthetic = prepare_dataset(args)
+    transformed_original, transformed_synthetic = prepare_dataset(args.dataset, args.method)
     
     privacy_score = calculate_privacy(transformed_original, transformed_synthetic)
 
