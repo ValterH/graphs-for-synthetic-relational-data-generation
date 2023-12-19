@@ -11,7 +11,7 @@ datasets has made significant advances in recent years. However, the more intric
 synthesising entire databases has received less attention. A primary limitation of these methods is
 their struggle to preserve the relationships between different tables within the database.
 
->In this project explicitly model the relationships between tables by leveraging a graph representation of our data.
+In this project we explicitly model the relationships between tables by leveraging a graph representation of the data.
 
 Installation
 ------------
