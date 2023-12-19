@@ -1,5 +1,4 @@
-Leveraging Graph Neural Networks for One-to-Many
-Relational Data Synthesis
+Leveraging Graph Neural Networks for Relational Data Synthesis
 ==============================
 <p align="center">
   <img src="images/pipeline.gif" />
