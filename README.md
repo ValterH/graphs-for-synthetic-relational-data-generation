@@ -29,6 +29,17 @@ pip install torch-sparse -f https://pytorch-geometric.com/whl/torch-2.1.0+cu121.
 pip install torch-scatter -f https://pytorch-geometric.com/whl/torch-2.1.0+cu121.html
 ```
 
+Example
+------------
+Training
+```bash
+python src/generation/train.py --dataset-name DATASET_NAME
+```
+Sampling
+```bash
+python src/generation/sample.py --dataset-name DATASET_NAME --num-samples NUM_SAMPLES
+```
+
 Project Organization
 ------------
 
